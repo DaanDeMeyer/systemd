@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 
+#include "sd-json.h"
+
 #include "cryptenroll-wipe.h"
 #include "cryptenroll.h"
-#include "json.h"
 #include "memory-util.h"
 #include "parse-util.h"
 #include "set.h"

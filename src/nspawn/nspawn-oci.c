@@ -5,6 +5,8 @@
 #include <seccomp.h>
 #endif
 
+#include "sd-json.h"
+
 #include "bus-util.h"
 #include "cap-list.h"
 #include "cpu-set-util.h"
@@ -12,7 +14,6 @@
 #include "format-util.h"
 #include "fs-util.h"
 #include "hostname-util.h"
-#include "json.h"
 #include "missing_sched.h"
 #include "nspawn-oci.h"
 #include "path-util.h"

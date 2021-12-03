@@ -6,6 +6,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "sd-json.h"
+
 #include "alloc-util.h"
 #include "bus-common-errors.h"
 #include "bus-get-properties.h"
@@ -20,7 +22,6 @@
 #include "hostname-setup.h"
 #include "hostname-util.h"
 #include "id128-util.h"
-#include "json.h"
 #include "main-func.h"
 #include "missing_capability.h"
 #include "nscd-flush.h"

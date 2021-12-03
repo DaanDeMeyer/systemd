@@ -171,9 +171,6 @@ shared_sources = files('''
         journal-importer.h
         journal-util.c
         journal-util.h
-        json-internal.h
-        json.c
-        json.h
         kbd-util.c
         kbd-util.h
         keyring-util.h

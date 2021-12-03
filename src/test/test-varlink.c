@@ -5,9 +5,9 @@
 #include <pthread.h>
 
 #include "sd-event.h"
+#include "sd-json.h"
 
 #include "fd-util.h"
-#include "json.h"
 #include "rm-rf.h"
 #include "strv.h"
 #include "tmpfile-util.h"

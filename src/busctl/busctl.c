@@ -3,6 +3,7 @@
 #include <getopt.h>
 
 #include "sd-bus.h"
+#include "sd-json.h"
 
 #include "alloc-util.h"
 #include "bus-dump.h"
@@ -17,7 +18,6 @@
 #include "fileio.h"
 #include "format-table.h"
 #include "glyph-util.h"
-#include "json.h"
 #include "log.h"
 #include "main-func.h"
 #include "pager.h"

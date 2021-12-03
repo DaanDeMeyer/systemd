@@ -28,6 +28,7 @@ _not_installed_headers = '''
         sd-dhcp-server.h
         sd-ipv4acd.h
         sd-ipv4ll.h
+        sd-json.h
         sd-lldp-rx.h
         sd-lldp-tx.h
         sd-lldp.h

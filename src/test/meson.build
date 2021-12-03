@@ -193,8 +193,6 @@ tests += [
 
         [['src/test/test-macro.c']],
 
-        [['src/test/test-json.c']],
-
         [['src/test/test-modhex.c']],
 
         [['src/test/test-libmount.c'],

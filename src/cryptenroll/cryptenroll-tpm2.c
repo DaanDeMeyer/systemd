@@ -1,9 +1,10 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 
+#include "sd-json.h"
+
 #include "alloc-util.h"
 #include "cryptenroll-tpm2.h"
 #include "hexdecoct.h"
-#include "json.h"
 #include "memory-util.h"
 #include "tpm2-util.h"
 

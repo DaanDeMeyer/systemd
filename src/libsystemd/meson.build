@@ -132,6 +132,8 @@ libsystemd_sources = files('''
         sd-device/sd-device.c
         sd-hwdb/hwdb-internal.h
         sd-hwdb/sd-hwdb.c
+        sd-json/json-internal.h
+        sd-json/sd-json.c
         sd-netlink/netlink-genl.c
         sd-netlink/netlink-genl.h
         sd-netlink/netlink-internal.h
@@ -305,6 +307,8 @@ tests += [
         [['src/libsystemd/sd-device/test-device-util.c']],
 
         [['src/libsystemd/sd-device/test-sd-device-monitor.c']],
+
+        [['src/libsystemd/sd-json/test-json.c']],
 ]
 
 if cxx_cmd != ''

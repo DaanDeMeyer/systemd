@@ -7,6 +7,8 @@
 #include <p11-kit/p11-kit.h>
 #include <p11-kit/uri.h>
 
+#include "sd-json.h"
+
 #include "alloc-util.h"
 #include "ask-password-api.h"
 #include "cryptsetup-pkcs11.h"
@@ -15,7 +17,6 @@
 #include "fileio.h"
 #include "format-util.h"
 #include "hexdecoct.h"
-#include "json.h"
 #include "macro.h"
 #include "memory-util.h"
 #include "parse-util.h"

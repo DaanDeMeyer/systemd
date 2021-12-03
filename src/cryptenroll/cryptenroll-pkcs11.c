@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 
+#include "sd-json.h"
+
 #include "cryptenroll-pkcs11.h"
 #include "hexdecoct.h"
-#include "json.h"
 #include "memory-util.h"
 #include "openssl-util.h"
 #include "pkcs11-util.h"

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 #pragma once
 
-#include "json.h"
+#include "sd-json.h"
 
 #if HAVE_ELFUTILS
 /* Parse an ELF object in a forked process, so that errors while iterating over

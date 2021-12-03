@@ -3,10 +3,11 @@
 #include <p11-kit/p11-kit.h>
 #include <p11-kit/uri.h>
 
+#include "sd-json.h"
+
 #include "cryptsetup-token-util.h"
 #include "escape.h"
 #include "hexdecoct.h"
-#include "json.h"
 #include "luks2-pkcs11.h"
 #include "memory-util.h"
 #include "pkcs11-util.h"

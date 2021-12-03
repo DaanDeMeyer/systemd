@@ -1,11 +1,12 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 
+#include "sd-json.h"
+
 #include "ask-password-api.h"
 #include "cryptsetup-fido2.h"
 #include "env-util.h"
 #include "fileio.h"
 #include "hexdecoct.h"
-#include "json.h"
 #include "libfido2-util.h"
 #include "parse-util.h"
 #include "random-util.h"

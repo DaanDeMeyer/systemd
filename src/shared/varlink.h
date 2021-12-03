@@ -2,8 +2,8 @@
 #pragma once
 
 #include "sd-event.h"
+#include "sd-json.h"
 
-#include "json.h"
 #include "time-util.h"
 
 /* A minimal Varlink implementation. We only implement the minimal, obvious bits here though. No validation,

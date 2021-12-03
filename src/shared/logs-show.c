@@ -22,7 +22,7 @@
 #include "io-util.h"
 #include "journal-internal.h"
 #include "journal-util.h"
-#include "json.h"
+#include "sd-json.h"
 #include "locale-util.h"
 #include "log.h"
 #include "logs-show.h"

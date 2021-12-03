@@ -5,8 +5,8 @@
 #include <sys/types.h>
 
 #include "sd-id128.h"
+#include "sd-json.h"
 
-#include "json.h"
 #include "missing_resource.h"
 #include "time-util.h"
 

@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 
+#include "sd-json.h"
 #include "sd-messages.h"
 
 #include "alloc-util.h"
@@ -16,7 +17,6 @@
 #include "float.h"
 #include "hexdecoct.h"
 #include "json-internal.h"
-#include "json.h"
 #include "macro.h"
 #include "memory-util.h"
 #include "string-table.h"

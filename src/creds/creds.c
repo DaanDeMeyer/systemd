@@ -3,6 +3,8 @@
 #include <getopt.h>
 #include <unistd.h>
 
+#include "sd-json.h"
+
 #include "creds-util.h"
 #include "dirent-util.h"
 #include "escape.h"
@@ -10,7 +12,6 @@
 #include "format-table.h"
 #include "hexdecoct.h"
 #include "io-util.h"
-#include "json.h"
 #include "main-func.h"
 #include "memory-util.h"
 #include "missing_magic.h"

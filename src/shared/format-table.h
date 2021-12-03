@@ -5,7 +5,8 @@
 #include <stdio.h>
 #include <sys/types.h>
 
-#include "json.h"
+#include "sd-json.h"
+
 #include "macro.h"
 #include "pager.h"
 

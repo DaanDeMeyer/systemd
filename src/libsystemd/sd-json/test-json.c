@@ -3,12 +3,13 @@
 #include <float.h>
 #include <math.h>
 
+#include "sd-json.h"
+
 #include "alloc-util.h"
 #include "escape.h"
 #include "fd-util.h"
 #include "fileio.h"
 #include "json-internal.h"
-#include "json.h"
 #include "string-util.h"
 #include "strv.h"
 #include "tests.h"

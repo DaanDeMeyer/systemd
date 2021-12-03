@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 
 #include "sd-id128.h"
+#include "sd-json.h"
 
 #include "alloc-util.h"
 #include "blkid-util.h"
@@ -37,7 +38,6 @@
 #include "hexdecoct.h"
 #include "hmac.h"
 #include "id128-util.h"
-#include "json.h"
 #include "list.h"
 #include "loop-util.h"
 #include "main-func.h"

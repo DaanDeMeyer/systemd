@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 
+#include "sd-json.h"
+
 #include "cryptenroll-fido2.h"
 #include "hexdecoct.h"
-#include "json.h"
 #include "libfido2-util.h"
 #include "memory-util.h"
 #include "random-util.h"

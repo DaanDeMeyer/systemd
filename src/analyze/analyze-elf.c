@@ -6,7 +6,7 @@
 #include "fd-util.h"
 #include "format-table.h"
 #include "format-util.h"
-#include "json.h"
+#include "sd-json.h"
 #include "path-util.h"
 #include "strv.h"
 

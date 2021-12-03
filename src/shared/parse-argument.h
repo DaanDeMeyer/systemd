@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 #pragma once
 
-#include "json.h"
+#include "sd-json.h"
 
 int parse_boolean_argument(const char *optname, const char *s, bool *ret);
 int parse_json_argument(const char *s, JsonFormatFlags *ret);

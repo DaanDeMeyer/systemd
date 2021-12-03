@@ -4,8 +4,8 @@
 #include <stdbool.h>
 
 #include "sd-bus.h"
+#include "sd-json.h"
 
-#include "json.h"
 #include "pager.h"
 #include "unit-file.h"
 

@@ -4,10 +4,11 @@
 #include <libcryptsetup.h>
 #include <string.h>
 
+#include "sd-json.h"
+
 #include "cryptsetup-token.h"
 #include "cryptsetup-token-util.h"
 #include "hexdecoct.h"
-#include "json.h"
 #include "luks2-fido2.h"
 #include "memory-util.h"
 #include "version.h"

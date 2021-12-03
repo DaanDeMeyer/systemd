@@ -8,6 +8,7 @@
 
 #include "sd-bus.h"
 #include "sd-id128.h"
+#include "sd-json.h"
 
 #include "alloc-util.h"
 #include "architecture.h"
@@ -17,7 +18,6 @@
 #include "format-table.h"
 #include "hostname-setup.h"
 #include "hostname-util.h"
-#include "json.h"
 #include "main-func.h"
 #include "parse-argument.h"
 #include "pretty-print.h"

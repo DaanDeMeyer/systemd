@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 #pragma once
 
-#include "json.h"
+#include "sd-json.h"
 
 int identity_add_token_pin(JsonVariant **v, const char *pin);
 
