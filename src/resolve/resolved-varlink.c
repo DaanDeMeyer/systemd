@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 
 #include "in-addr-util.h"
+#include "json-util.h"
 #include "resolved-dns-synthesize.h"
 #include "resolved-varlink.h"
 #include "socket-netlink.h"

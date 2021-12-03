@@ -14,6 +14,7 @@
 #include "format-util.h"
 #include "fs-util.h"
 #include "hostname-util.h"
+#include "json-util.h"
 #include "missing_sched.h"
 #include "nspawn-oci.h"
 #include "path-util.h"

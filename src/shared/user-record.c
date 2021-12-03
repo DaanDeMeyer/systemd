@@ -8,6 +8,7 @@
 #include "fs-util.h"
 #include "hexdecoct.h"
 #include "hostname-util.h"
+#include "json-util.h"
 #include "memory-util.h"
 #include "path-util.h"
 #include "pkcs11-util.h"

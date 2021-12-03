@@ -11,6 +11,7 @@
 #include "env-util.h"
 #include "errno-util.h"
 #include "in-addr-util.h"
+#include "json-util.h"
 #include "macro.h"
 #include "nss-util.h"
 #include "resolved-def.h"

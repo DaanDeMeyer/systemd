@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 
 #include "group-record.h"
+#include "json-util.h"
 #include "strv.h"
 #include "uid-alloc-range.h"
 #include "user-util.h"

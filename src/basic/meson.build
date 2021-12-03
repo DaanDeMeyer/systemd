@@ -84,6 +84,8 @@ basic_sources = files('''
         io-util.h
         ioprio-util.c
         ioprio-util.h
+        json-util.h
+        json-util.c
         limits-util.c
         limits-util.h
         linux/btrfs.h

@@ -9,6 +9,7 @@
 #include "fd-util.h"
 #include "fileio.h"
 #include "format-util.h"
+#include "json-util.h"
 #include "memory-util.h"
 #include "oomd-manager-bus.h"
 #include "oomd-manager.h"
