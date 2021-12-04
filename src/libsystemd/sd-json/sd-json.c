@@ -426,6 +426,10 @@ int json_variant_new_stringn(JsonVariant **ret, const char *s, size_t n) {
         return 0;
 }
 
+int json_variant_new_string(JsonVariant **ret, const char *s) {
+        return json_variant_new_stringn(ret, s, SIZE_MAX);
+}
+
 int json_variant_new_base64(JsonVariant **ret, const void *p, size_t n) {
         _cleanup_free_ char *s = NULL;
         ssize_t k;
@@ -1033,6 +1037,43 @@ double json_variant_real(JsonVariant *v) {
 mismatch:
         log_debug("Non-integer JSON variant requested as integer, returning 0.");
         return 0.0;
+}
+
+
+bool json_variant_is_string(JsonVariant *v) {
+        return json_variant_has_type(v, JSON_VARIANT_STRING);
+}
+
+bool json_variant_is_integer(JsonVariant *v) {
+        return json_variant_has_type(v, JSON_VARIANT_INTEGER);
+}
+
+bool json_variant_is_unsigned(JsonVariant *v) {
+        return json_variant_has_type(v, JSON_VARIANT_UNSIGNED);
+}
+
+bool json_variant_is_real(JsonVariant *v) {
+        return json_variant_has_type(v, JSON_VARIANT_REAL);
+}
+
+bool json_variant_is_number(JsonVariant *v) {
+        return json_variant_has_type(v, JSON_VARIANT_NUMBER);
+}
+
+bool json_variant_is_boolean(JsonVariant *v) {
+        return json_variant_has_type(v, JSON_VARIANT_BOOLEAN);
+}
+
+bool json_variant_is_array(JsonVariant *v) {
+        return json_variant_has_type(v, JSON_VARIANT_ARRAY);
+}
+
+bool json_variant_is_object(JsonVariant *v) {
+        return json_variant_has_type(v, JSON_VARIANT_OBJECT);
+}
+
+bool json_variant_is_null(JsonVariant *v) {
+        return json_variant_has_type(v, JSON_VARIANT_NULL);
 }
 
 bool json_variant_is_negative(JsonVariant *v) {
@@ -3226,6 +3267,10 @@ int json_parse_file_at(FILE *f, int dir_fd, const char *path, JsonParseFlags fla
 
         p = text;
         return json_parse_internal(&p, source, flags, ret, ret_line, ret_column, false);
+}
+
+int json_parse_file(FILE *f, const char *path, JsonParseFlags flags, JsonVariant **ret, unsigned *ret_line, unsigned *ret_column) {
+        return json_parse_file_at(f, AT_FDCWD, path, flags, ret, ret_line, ret_column);
 }
 
 int json_buildv(JsonVariant **ret, va_list ap) {

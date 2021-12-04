@@ -61,6 +61,7 @@ typedef enum JsonVariantType {
 } JsonVariantType;
 
 int json_variant_new_stringn(JsonVariant **ret, const char *s, size_t n);
+int json_variant_new_string(JsonVariant **ret, const char *s);
 int json_variant_new_base64(JsonVariant **ret, const void *p, size_t n);
 int json_variant_new_hex(JsonVariant **ret, const void *p, size_t n);
 int json_variant_new_integer(JsonVariant **ret, int64_t i);
@@ -73,10 +74,6 @@ int json_variant_new_array_strv(JsonVariant **ret, char **l);
 int json_variant_new_object(JsonVariant **ret, JsonVariant **array, size_t n);
 int json_variant_new_null(JsonVariant **ret);
 int json_variant_new_id128(JsonVariant **ret, sd_id128_t id);
-
-static inline int json_variant_new_string(JsonVariant **ret, const char *s) {
-        return json_variant_new_stringn(ret, s, SIZE_MAX);
-}
 
 JsonVariant *json_variant_ref(JsonVariant *v);
 JsonVariant *json_variant_unref(JsonVariant *v);
@@ -93,41 +90,15 @@ bool json_variant_boolean(JsonVariant *v);
 JsonVariantType json_variant_type(JsonVariant *v);
 bool json_variant_has_type(JsonVariant *v, JsonVariantType type);
 
-static inline bool json_variant_is_string(JsonVariant *v) {
-        return json_variant_has_type(v, JSON_VARIANT_STRING);
-}
-
-static inline bool json_variant_is_integer(JsonVariant *v) {
-        return json_variant_has_type(v, JSON_VARIANT_INTEGER);
-}
-
-static inline bool json_variant_is_unsigned(JsonVariant *v) {
-        return json_variant_has_type(v, JSON_VARIANT_UNSIGNED);
-}
-
-static inline bool json_variant_is_real(JsonVariant *v) {
-        return json_variant_has_type(v, JSON_VARIANT_REAL);
-}
-
-static inline bool json_variant_is_number(JsonVariant *v) {
-        return json_variant_has_type(v, JSON_VARIANT_NUMBER);
-}
-
-static inline bool json_variant_is_boolean(JsonVariant *v) {
-        return json_variant_has_type(v, JSON_VARIANT_BOOLEAN);
-}
-
-static inline bool json_variant_is_array(JsonVariant *v) {
-        return json_variant_has_type(v, JSON_VARIANT_ARRAY);
-}
-
-static inline bool json_variant_is_object(JsonVariant *v) {
-        return json_variant_has_type(v, JSON_VARIANT_OBJECT);
-}
-
-static inline bool json_variant_is_null(JsonVariant *v) {
-        return json_variant_has_type(v, JSON_VARIANT_NULL);
-}
+bool json_variant_is_string(JsonVariant *v);
+bool json_variant_is_integer(JsonVariant *v);
+bool json_variant_is_unsigned(JsonVariant *v);
+bool json_variant_is_real(JsonVariant *v);
+bool json_variant_is_number(JsonVariant *v);
+bool json_variant_is_boolean(JsonVariant *v);
+bool json_variant_is_array(JsonVariant *v);
+bool json_variant_is_object(JsonVariant *v);
+bool json_variant_is_null(JsonVariant *v);
 
 bool json_variant_is_negative(JsonVariant *v);
 bool json_variant_is_blank_object(JsonVariant *v);
@@ -214,10 +185,7 @@ typedef enum JsonParseFlags {
 int json_parse(const char *string, JsonParseFlags flags, JsonVariant **ret, unsigned *ret_line, unsigned *ret_column);
 int json_parse_continue(const char **p, JsonParseFlags flags, JsonVariant **ret, unsigned *ret_line, unsigned *ret_column);
 int json_parse_file_at(FILE *f, int dir_fd, const char *path, JsonParseFlags flags, JsonVariant **ret, unsigned *ret_line, unsigned *ret_column);
-
-static inline int json_parse_file(FILE *f, const char *path, JsonParseFlags flags, JsonVariant **ret, unsigned *ret_line, unsigned *ret_column) {
-        return json_parse_file_at(f, AT_FDCWD, path, flags, ret, ret_line, ret_column);
-}
+int json_parse_file(FILE *f, const char *path, JsonParseFlags flags, JsonVariant **ret, unsigned *ret_line, unsigned *ret_column);
 
 enum {
         _JSON_BUILD_STRING,
