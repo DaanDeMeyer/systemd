@@ -6,6 +6,7 @@
 #include "dlfcn-util.h"
 #include "log.h"
 #include "parse-util.h"
+#include "string-util.h"
 
 static void *cryptsetup_dl = NULL;
 

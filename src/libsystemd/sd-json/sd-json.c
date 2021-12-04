@@ -12,6 +12,7 @@
 
 #include "alloc-util.h"
 #include "errno-util.h"
+#include "ether-addr-util.h"
 #include "fd-util.h"
 #include "fileio.h"
 #include "float.h"
@@ -126,6 +127,9 @@ struct JsonVariant {
 assert_cc(sizeof(JsonVariant) == 40U);
 assert_cc(INLINE_STRING_MAX == 7U);
 #endif
+
+assert_cc(sizeof(uint32_t) == sizeof(unsigned));
+assert_cc(sizeof(int32_t) == sizeof(int));
 
 static JsonSource* json_source_new(const char *name) {
         JsonSource *s;

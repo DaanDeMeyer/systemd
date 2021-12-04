@@ -4,6 +4,7 @@
 
 #include "parse-argument.h"
 #include "stdio-util.h"
+#include "string-util.h"
 #include "tests.h"
 
 TEST(parse_json_argument) {

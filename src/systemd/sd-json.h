@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 #pragma once
 
-#include <fcntl.h>
+#include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -9,13 +9,7 @@
 
 #include "sd-id128.h"
 
-#include "ether-addr-util.h"
-#include "in-addr-util.h"
-#include "log.h"
-#include "macro.h"
-#include "string-util.h"
-#include "strv.h"
-#include "time-util.h"
+#include "_sd-common.h"
 
 /*
   In case you wonder why we have our own JSON implementation, here are a couple of reasons why this implementation has
@@ -79,7 +73,7 @@ JsonVariant *json_variant_ref(JsonVariant *v);
 JsonVariant *json_variant_unref(JsonVariant *v);
 void json_variant_unref_many(JsonVariant **array, size_t n);
 
-DEFINE_TRIVIAL_CLEANUP_FUNC(JsonVariant *, json_variant_unref);
+_SD_DEFINE_POINTER_CLEANUP_FUNC(JsonVariant, json_variant_unref);
 
 const char *json_variant_string(JsonVariant *v);
 int64_t json_variant_integer(JsonVariant *v);
@@ -331,10 +325,7 @@ int json_dispatch_user_group_name(const char *name, JsonVariant *variant, JsonDi
 int json_dispatch_id128(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
 int json_dispatch_unsupported(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
 
-assert_cc(sizeof(uint32_t) == sizeof(unsigned));
 #define json_dispatch_uint json_dispatch_uint32
-
-assert_cc(sizeof(int32_t) == sizeof(int));
 #define json_dispatch_int json_dispatch_int32
 
 #define JSON_VARIANT_STRING_CONST(x) _JSON_VARIANT_STRING_CONST(UNIQ, (x))

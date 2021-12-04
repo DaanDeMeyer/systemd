@@ -8,6 +8,7 @@
 #include "hexdecoct.h"
 #include "luks2-tpm2.h"
 #include "memory-util.h"
+#include "string-util.h"
 #include "tpm2-util.h"
 #include "version.h"
 

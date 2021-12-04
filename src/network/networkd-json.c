@@ -16,6 +16,7 @@
 #include "networkd-route.h"
 #include "networkd-routing-policy-rule.h"
 #include "sort-util.h"
+#include "strv.h"
 #include "user-util.h"
 #include "wifi-util.h"
 

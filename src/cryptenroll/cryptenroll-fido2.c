@@ -7,6 +7,7 @@
 #include "libfido2-util.h"
 #include "memory-util.h"
 #include "random-util.h"
+#include "string-util.h"
 
 int enroll_fido2(
                 struct crypt_device *cd,
