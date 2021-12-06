@@ -105,4 +105,7 @@ typedef void (*_sd_destroy_t)(void *userdata);
         _SD_##id##_INT64_MIN = INT64_MIN,    \
         _SD_##id##_INT64_MAX = INT64_MAX
 
+#define _SD_ENUM_FORCE_U64(id)               \
+        _SD##id##_UINT64_MAX = UINT64_MAX
+
 #endif
