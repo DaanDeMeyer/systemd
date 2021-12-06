@@ -52,6 +52,8 @@ typedef enum JsonVariantType {
         JSON_VARIANT_NULL,
         _JSON_VARIANT_TYPE_MAX,
         _JSON_VARIANT_TYPE_INVALID = -EINVAL,
+
+        _SD_ENUM_FORCE_S64(JSON_VARIANT),
 } JsonVariantType;
 
 int json_variant_new_stringn(JsonVariant **ret, const char *s, size_t n);
@@ -149,6 +151,8 @@ typedef enum JsonFormatFlags {
         JSON_FORMAT_SEQ         = 1 << 7, /* prefix/suffix with RFC 7464 application/json-seq */
         JSON_FORMAT_FLUSH       = 1 << 8, /* call fflush() after dumping JSON */
         JSON_FORMAT_OFF         = 1 << 9, /* make json_variant_format() fail with -ENOEXEC */
+
+        _SD_ENUM_FORCE_U64(JSON_FORMAT),
 } JsonFormatFlags;
 
 int json_variant_format(JsonVariant *v, JsonFormatFlags flags, char **ret);
@@ -174,6 +178,8 @@ int json_variant_normalize(JsonVariant **v);
 
 typedef enum JsonParseFlags {
         JSON_PARSE_SENSITIVE = 1 << 0, /* mark variant as "sensitive", i.e. something containing secret key material or such */
+
+        _SD_ENUM_FORCE_U64(JSON_PARSE)
 } JsonParseFlags;
 
 int json_parse(const char *string, JsonParseFlags flags, JsonVariant **ret, unsigned *ret_line, unsigned *ret_column);
@@ -296,6 +302,8 @@ typedef enum JsonDispatchFlags {
         /* The following two may be passed into log_json() in addition to the three above */
         JSON_DEBUG      = 1 << 4, /* Indicates that this log message is a debug message */
         JSON_WARNING    = 1 << 5, /* Indicates that this log message is a warning message */
+
+        _SD_ENUM_FORCE_U64(JSON_DISPATCH),
 } JsonDispatchFlags;
 
 typedef int (*JsonDispatchCallback)(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
