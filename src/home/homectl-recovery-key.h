@@ -3,4 +3,4 @@
 
 #include "sd-json.h"
 
-int identity_add_recovery_key(JsonVariant **v);
+int identity_add_recovery_key(sd_json_variant **v);

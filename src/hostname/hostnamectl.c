@@ -32,7 +32,7 @@ static char *arg_host = NULL;
 static bool arg_transient = false;
 static bool arg_pretty = false;
 static bool arg_static = false;
-static JsonFormatFlags arg_json_format_flags = JSON_FORMAT_OFF;
+static sd_json_format_flags_t arg_json_format_flags = SD_JSON_FORMAT_OFF;
 
 typedef struct StatusInfo {
         const char *hostname;
@@ -328,10 +328,10 @@ static int show_status(int argc, char **argv, void *userdata) {
         sd_bus *bus = userdata;
         int r;
 
-        if (arg_json_format_flags != JSON_FORMAT_OFF) {
+        if (arg_json_format_flags != SD_JSON_FORMAT_OFF) {
                 _cleanup_(sd_bus_error_free) sd_bus_error error = SD_BUS_ERROR_NULL;
                 _cleanup_(sd_bus_message_unrefp) sd_bus_message *reply = NULL;
-                _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
                 const char *text = NULL;
 
                 r = sd_bus_call_method(
@@ -350,11 +350,11 @@ static int show_status(int argc, char **argv, void *userdata) {
                 if (r < 0)
                         return bus_log_parse_error(r);
 
-                r = json_parse(text, 0, &v, NULL, NULL);
+                r = sd_json_parse(text, 0, &v, NULL, NULL);
                 if (r < 0)
                         return log_error_errno(r, "Failed to parse JSON: %m");
 
-                json_variant_dump(v, arg_json_format_flags, NULL, NULL);
+                sd_json_variant_dump(v, arg_json_format_flags, NULL, NULL);
                 return 0;
         }
 

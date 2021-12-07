@@ -10,12 +10,12 @@
 #include "path-util.h"
 #include "strv.h"
 
-int analyze_elf(char **filenames, JsonFormatFlags json_flags) {
+int analyze_elf(char **filenames, sd_json_format_flags_t json_flags) {
         char **filename;
         int r;
 
         STRV_FOREACH(filename, filenames) {
-                _cleanup_(json_variant_unrefp) JsonVariant *package_metadata = NULL;
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *package_metadata = NULL;
                 _cleanup_(table_unrefp) Table *t = NULL;
                 _cleanup_free_ char *abspath = NULL;
                 _cleanup_close_ int fd = -1;
@@ -50,12 +50,12 @@ int analyze_elf(char **filenames, JsonFormatFlags json_flags) {
                         return table_log_add_error(r);
 
                 if (package_metadata) {
-                        JsonVariant *module_json;
+                        sd_json_variant *module_json;
                         const char *module_name;
 
-                        JSON_VARIANT_OBJECT_FOREACH(module_name, module_json, package_metadata) {
+                        SD_JSON_VARIANT_OBJECT_FOREACH(module_name, module_json, package_metadata) {
                                 const char *field_name;
-                                JsonVariant *field;
+                                sd_json_variant *field;
 
                                 /* The ELF type and architecture are added as top-level objects,
                                  * since they are only parsed for the file itself, but the packaging
@@ -71,7 +71,7 @@ int analyze_elf(char **filenames, JsonFormatFlags json_flags) {
                                         r = table_add_many(
                                                         t,
                                                         TABLE_STRING, suffixed,
-                                                        TABLE_STRING, json_variant_string(module_json));
+                                                        TABLE_STRING, sd_json_variant_string(module_json));
                                         if (r < 0)
                                                 return table_log_add_error(r);
 
@@ -97,8 +97,8 @@ int analyze_elf(char **filenames, JsonFormatFlags json_flags) {
                                                 return table_log_add_error(r);
                                 }
 
-                                JSON_VARIANT_OBJECT_FOREACH(field_name, field, module_json)
-                                        if (json_variant_is_string(field)) {
+                                SD_JSON_VARIANT_OBJECT_FOREACH(field_name, field, module_json)
+                                        if (sd_json_variant_is_string(field)) {
                                                 _cleanup_free_ char *suffixed = NULL;
 
                                                 suffixed = strjoin(field_name, ":");
@@ -108,20 +108,20 @@ int analyze_elf(char **filenames, JsonFormatFlags json_flags) {
                                                 r = table_add_many(
                                                                 t,
                                                                 TABLE_STRING, suffixed,
-                                                                TABLE_STRING, json_variant_string(field));
+                                                                TABLE_STRING, sd_json_variant_string(field));
                                                 if (r < 0)
                                                         return table_log_add_error(r);
                                         }
                         }
                 }
-                if (json_flags & JSON_FORMAT_OFF) {
+                if (json_flags & SD_JSON_FORMAT_OFF) {
                         (void) table_set_header(t, true);
 
                         r = table_print(t, NULL);
                         if (r < 0)
                                 return table_log_print_error(r);
                 } else
-                        json_variant_dump(package_metadata, json_flags, stdout, NULL);
+                        sd_json_variant_dump(package_metadata, json_flags, stdout, NULL);
         }
 
         return 0;

@@ -763,7 +763,7 @@ static int submit_coredump(
                 struct iovec_wrapper *iovw,
                 int input_fd) {
 
-        _cleanup_(json_variant_unrefp) JsonVariant *json_metadata = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *json_metadata = NULL;
         _cleanup_close_ int coredump_fd = -1, coredump_node_fd = -1;
         _cleanup_free_ char *filename = NULL, *coredump_data = NULL;
         _cleanup_free_ char *stacktrace = NULL;
@@ -771,7 +771,7 @@ static int submit_coredump(
         const char *module_name;
         uint64_t coredump_size = UINT64_MAX, coredump_compressed_size = UINT64_MAX;
         bool truncated = false;
-        JsonVariant *module_json;
+        sd_json_variant *module_json;
         int r;
         assert(context);
         assert(iovw);
@@ -851,27 +851,27 @@ log:
         if (json_metadata) {
                 _cleanup_free_ char *formatted_json = NULL;
 
-                r = json_variant_format(json_metadata, 0, &formatted_json);
+                r = sd_json_variant_format(json_metadata, 0, &formatted_json);
                 if (r < 0)
                         return log_error_errno(r, "Failed to format JSON package metadata: %m");
 
                 (void) iovw_put_string_field(iovw, "COREDUMP_PACKAGE_JSON=", formatted_json);
         }
 
-        JSON_VARIANT_OBJECT_FOREACH(module_name, module_json, json_metadata) {
-                JsonVariant *package_name, *package_version;
+        SD_JSON_VARIANT_OBJECT_FOREACH(module_name, module_json, json_metadata) {
+                sd_json_variant *package_name, *package_version;
 
                 /* We only add structured fields for the 'main' ELF module */
                 if (!path_equal_filename(module_name, context->meta[META_EXE]))
                         continue;
 
-                package_name = json_variant_by_key(module_json, "name");
+                package_name = sd_json_variant_by_key(module_json, "name");
                 if (package_name)
-                        (void) iovw_put_string_field(iovw, "COREDUMP_PACKAGE_NAME=", json_variant_string(package_name));
+                        (void) iovw_put_string_field(iovw, "COREDUMP_PACKAGE_NAME=", sd_json_variant_string(package_name));
 
-                package_version = json_variant_by_key(module_json, "version");
+                package_version = sd_json_variant_by_key(module_json, "version");
                 if (package_version)
-                        (void) iovw_put_string_field(iovw, "COREDUMP_PACKAGE_VERSION=", json_variant_string(package_version));
+                        (void) iovw_put_string_field(iovw, "COREDUMP_PACKAGE_VERSION=", sd_json_variant_string(package_version));
         }
 
         /* Optionally store the entire coredump in the journal */

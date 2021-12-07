@@ -23,32 +23,32 @@
 static int n_done = 0;
 static int block_write_fd = -1;
 
-static int method_something(Varlink *link, JsonVariant *parameters, VarlinkMethodFlags flags, void *userdata) {
-        _cleanup_(json_variant_unrefp) JsonVariant *ret = NULL;
-        JsonVariant *a, *b;
+static int method_something(Varlink *link, sd_json_variant *parameters, VarlinkMethodFlags flags, void *userdata) {
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *ret = NULL;
+        sd_json_variant *a, *b;
         int64_t x, y;
         int r;
 
-        a = json_variant_by_key(parameters, "a");
+        a = sd_json_variant_by_key(parameters, "a");
         if (!a)
                 return varlink_error(link, "io.test.BadParameters", NULL);
 
-        x = json_variant_integer(a);
+        x = sd_json_variant_integer(a);
 
-        b = json_variant_by_key(parameters, "b");
+        b = sd_json_variant_by_key(parameters, "b");
         if (!b)
                 return varlink_error(link, "io.test.BadParameters", NULL);
 
-        y = json_variant_integer(b);
+        y = sd_json_variant_integer(b);
 
-        r = json_build(&ret, JSON_BUILD_OBJECT(JSON_BUILD_PAIR("sum", JSON_BUILD_INTEGER(x + y))));
+        r = sd_json_build(&ret, SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("sum", SD_JSON_BUILD_INTEGER(x + y))));
         if (r < 0)
                 return r;
 
         return varlink_reply(link, ret);
 }
 
-static int method_done(Varlink *link, JsonVariant *parameters, VarlinkMethodFlags flags, void *userdata) {
+static int method_done(Varlink *link, sd_json_variant *parameters, VarlinkMethodFlags flags, void *userdata) {
 
         if (++n_done == 2)
                 sd_event_exit(varlink_get_event(link), EXIT_FAILURE);
@@ -56,12 +56,12 @@ static int method_done(Varlink *link, JsonVariant *parameters, VarlinkMethodFlag
         return 0;
 }
 
-static int reply(Varlink *link, JsonVariant *parameters, const char *error_id, VarlinkReplyFlags flags, void *userdata) {
-        JsonVariant *sum;
+static int reply(Varlink *link, sd_json_variant *parameters, const char *error_id, VarlinkReplyFlags flags, void *userdata) {
+        sd_json_variant *sum;
 
-        sum = json_variant_by_key(parameters, "sum");
+        sum = sd_json_variant_by_key(parameters, "sum");
 
-        assert_se(json_variant_integer(sum) == 7+22);
+        assert_se(sd_json_variant_integer(sum) == 7+22);
 
         if (++n_done == 2)
                 sd_event_exit(varlink_get_event(link), EXIT_FAILURE);
@@ -81,7 +81,7 @@ static int on_connect(VarlinkServer *s, Varlink *link, void *userdata) {
         return 0;
 }
 
-static int overload_reply(Varlink *link, JsonVariant *parameters, const char *error_id, VarlinkReplyFlags flags, void *userdata) {
+static int overload_reply(Varlink *link, sd_json_variant *parameters, const char *error_id, VarlinkReplyFlags flags, void *userdata) {
 
         /* This method call reply should always be called with a disconnection, since the method call should
          * be talking to an overloaded server */
@@ -117,7 +117,7 @@ static void flood_test(const char *address) {
                 assert_se(asprintf(&t, "flood-%zu", k) >= 0);
                 assert_se(varlink_set_description(connections[k], t) >= 0);
                 assert_se(varlink_attach_event(connections[k], e, k) >= 0);
-                assert_se(varlink_sendb(connections[k], "io.test.Rubbish", JSON_BUILD_OBJECT(JSON_BUILD_PAIR("id", JSON_BUILD_INTEGER(k)))) >= 0);
+                assert_se(varlink_sendb(connections[k], "io.test.Rubbish", SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("id", SD_JSON_BUILD_INTEGER(k)))) >= 0);
         }
 
         /* Then, create one more, which should fail */
@@ -126,7 +126,7 @@ static void flood_test(const char *address) {
         assert_se(varlink_set_description(c, "overload-client") >= 0);
         assert_se(varlink_attach_event(c, e, k) >= 0);
         assert_se(varlink_bind_reply(c, overload_reply) >= 0);
-        assert_se(varlink_invokeb(c, "io.test.Overload", JSON_BUILD_OBJECT(JSON_BUILD_PAIR("foo", JSON_BUILD_CONST_STRING("bar")))) >= 0);
+        assert_se(varlink_invokeb(c, "io.test.Overload", SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("foo", SD_JSON_BUILD_CONST_STRING("bar")))) >= 0);
 
         /* Unblock it */
         log_debug("Unblocking server...");
@@ -142,22 +142,22 @@ static void flood_test(const char *address) {
 
 static void *thread(void *arg) {
         _cleanup_(varlink_flush_close_unrefp) Varlink *c = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *i = NULL;
-        JsonVariant *o = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *i = NULL;
+        sd_json_variant *o = NULL;
         const char *e;
 
-        assert_se(json_build(&i, JSON_BUILD_OBJECT(JSON_BUILD_PAIR("a", JSON_BUILD_INTEGER(88)),
-                                                   JSON_BUILD_PAIR("b", JSON_BUILD_INTEGER(99)))) >= 0);
+        assert_se(sd_json_build(&i, SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("a", SD_JSON_BUILD_INTEGER(88)),
+                                                   SD_JSON_BUILD_PAIR("b", SD_JSON_BUILD_INTEGER(99)))) >= 0);
 
         assert_se(varlink_connect_address(&c, arg) >= 0);
         assert_se(varlink_set_description(c, "thread-client") >= 0);
 
         assert_se(varlink_call(c, "io.test.DoSomething", i, &o, &e, NULL) >= 0);
-        assert_se(json_variant_integer(json_variant_by_key(o, "sum")) == 88 + 99);
+        assert_se(sd_json_variant_integer(sd_json_variant_by_key(o, "sum")) == 88 + 99);
         assert_se(!e);
 
-        assert_se(varlink_callb(c, "io.test.IDontExist", &o, &e, NULL, JSON_BUILD_OBJECT(JSON_BUILD_PAIR("x", JSON_BUILD_REAL(5.5)))) >= 0);
-        assert_se(streq_ptr(json_variant_string(json_variant_by_key(o, "method")), "io.test.IDontExist"));
+        assert_se(varlink_callb(c, "io.test.IDontExist", &o, &e, NULL, SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("x", SD_JSON_BUILD_REAL(5.5)))) >= 0);
+        assert_se(streq_ptr(sd_json_variant_string(sd_json_variant_by_key(o, "method")), "io.test.IDontExist"));
         assert_se(streq(e, VARLINK_ERROR_METHOD_NOT_FOUND));
 
         flood_test(arg);
@@ -189,7 +189,7 @@ int main(int argc, char *argv[]) {
         _cleanup_(varlink_server_unrefp) VarlinkServer *s = NULL;
         _cleanup_(varlink_flush_close_unrefp) Varlink *c = NULL;
         _cleanup_(rm_rf_physical_and_freep) char *tmpdir = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         _cleanup_(sd_event_unrefp) sd_event *e = NULL;
         _cleanup_(close_pairp) int block_fds[2] = { -1, -1 };
         pthread_t t;
@@ -222,8 +222,8 @@ int main(int argc, char *argv[]) {
         assert_se(varlink_set_description(c, "main-client") >= 0);
         assert_se(varlink_bind_reply(c, reply) >= 0);
 
-        assert_se(json_build(&v, JSON_BUILD_OBJECT(JSON_BUILD_PAIR("a", JSON_BUILD_INTEGER(7)),
-                                                   JSON_BUILD_PAIR("b", JSON_BUILD_INTEGER(22)))) >= 0);
+        assert_se(sd_json_build(&v, SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("a", SD_JSON_BUILD_INTEGER(7)),
+                                                   SD_JSON_BUILD_PAIR("b", SD_JSON_BUILD_INTEGER(22)))) >= 0);
 
         assert_se(varlink_invoke(c, "io.test.DoSomething", v) >= 0);
 

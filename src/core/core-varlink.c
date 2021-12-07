@@ -21,22 +21,22 @@ static const char* const managed_oom_mode_properties[] = {
         "ManagedOOMMemoryPressure",
 };
 
-static int build_user_json(const char *user_name, uid_t uid, JsonVariant **ret) {
+static int build_user_json(const char *user_name, uid_t uid, sd_json_variant **ret) {
         assert(user_name);
         assert(uid_is_valid(uid));
         assert(ret);
 
-        return json_build(ret, JSON_BUILD_OBJECT(
-                                   JSON_BUILD_PAIR("record", JSON_BUILD_OBJECT(
-                                       JSON_BUILD_PAIR("userName", JSON_BUILD_STRING(user_name)),
-                                       JSON_BUILD_PAIR("uid", JSON_BUILD_UNSIGNED(uid)),
-                                       JSON_BUILD_PAIR("gid", JSON_BUILD_UNSIGNED(uid)),
-                                       JSON_BUILD_PAIR("realName", JSON_BUILD_CONST_STRING("Dynamic User")),
-                                       JSON_BUILD_PAIR("homeDirectory", JSON_BUILD_CONST_STRING("/")),
-                                       JSON_BUILD_PAIR("shell", JSON_BUILD_CONST_STRING(NOLOGIN)),
-                                       JSON_BUILD_PAIR("locked", JSON_BUILD_BOOLEAN(true)),
-                                       JSON_BUILD_PAIR("service", JSON_BUILD_CONST_STRING("io.systemd.DynamicUser")),
-                                       JSON_BUILD_PAIR("disposition", JSON_BUILD_CONST_STRING("dynamic"))))));
+        return sd_json_build(ret, SD_JSON_BUILD_OBJECT(
+                                   SD_JSON_BUILD_PAIR("record", SD_JSON_BUILD_OBJECT(
+                                       SD_JSON_BUILD_PAIR("userName", SD_JSON_BUILD_STRING(user_name)),
+                                       SD_JSON_BUILD_PAIR("uid", SD_JSON_BUILD_UNSIGNED(uid)),
+                                       SD_JSON_BUILD_PAIR("gid", SD_JSON_BUILD_UNSIGNED(uid)),
+                                       SD_JSON_BUILD_PAIR("realName", SD_JSON_BUILD_CONST_STRING("Dynamic User")),
+                                       SD_JSON_BUILD_PAIR("homeDirectory", SD_JSON_BUILD_CONST_STRING("/")),
+                                       SD_JSON_BUILD_PAIR("shell", SD_JSON_BUILD_CONST_STRING(NOLOGIN)),
+                                       SD_JSON_BUILD_PAIR("locked", SD_JSON_BUILD_BOOLEAN(true)),
+                                       SD_JSON_BUILD_PAIR("service", SD_JSON_BUILD_CONST_STRING("io.systemd.DynamicUser")),
+                                       SD_JSON_BUILD_PAIR("disposition", SD_JSON_BUILD_CONST_STRING("dynamic"))))));
 }
 
 static bool user_match_lookup_parameters(LookupParameters *p, const char *name, uid_t uid) {
@@ -51,7 +51,7 @@ static bool user_match_lookup_parameters(LookupParameters *p, const char *name, 
         return true;
 }
 
-static int build_managed_oom_json_array_element(Unit *u, const char *property, JsonVariant **ret_v) {
+static int build_managed_oom_json_array_element(Unit *u, const char *property, sd_json_variant **ret_v) {
         bool use_limit = false;
         CGroupContext *c;
         const char *mode;
@@ -79,15 +79,15 @@ static int build_managed_oom_json_array_element(Unit *u, const char *property, J
         } else
                 return -EINVAL;
 
-        return json_build(ret_v, JSON_BUILD_OBJECT(
-                                 JSON_BUILD_PAIR("mode", JSON_BUILD_STRING(mode)),
-                                 JSON_BUILD_PAIR("path", JSON_BUILD_STRING(u->cgroup_path)),
-                                 JSON_BUILD_PAIR("property", JSON_BUILD_STRING(property)),
-                                 JSON_BUILD_PAIR_CONDITION(use_limit, "limit", JSON_BUILD_UNSIGNED(c->moom_mem_pressure_limit))));
+        return sd_json_build(ret_v, SD_JSON_BUILD_OBJECT(
+                                 SD_JSON_BUILD_PAIR("mode", SD_JSON_BUILD_STRING(mode)),
+                                 SD_JSON_BUILD_PAIR("path", SD_JSON_BUILD_STRING(u->cgroup_path)),
+                                 SD_JSON_BUILD_PAIR("property", SD_JSON_BUILD_STRING(property)),
+                                 SD_JSON_BUILD_PAIR_CONDITION(use_limit, "limit", SD_JSON_BUILD_UNSIGNED(c->moom_mem_pressure_limit))));
 }
 
 int manager_varlink_send_managed_oom_update(Unit *u) {
-        _cleanup_(json_variant_unrefp) JsonVariant *arr = NULL, *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *arr = NULL, *v = NULL;
         CGroupContext *c;
         int r;
 
@@ -113,23 +113,23 @@ int manager_varlink_send_managed_oom_update(Unit *u) {
         if (!c)
                 return 0;
 
-        r = json_build(&arr, JSON_BUILD_EMPTY_ARRAY);
+        r = sd_json_build(&arr, SD_JSON_BUILD_EMPTY_ARRAY);
         if (r < 0)
                 return r;
 
         for (size_t i = 0; i < ELEMENTSOF(managed_oom_mode_properties); i++) {
-                _cleanup_(json_variant_unrefp) JsonVariant *e = NULL;
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *e = NULL;
 
                 r = build_managed_oom_json_array_element(u, managed_oom_mode_properties[i], &e);
                 if (r < 0)
                         return r;
 
-                r = json_variant_append_array(&arr, e);
+                r = sd_json_variant_append_array(&arr, e);
                 if (r < 0)
                         return r;
         }
 
-        r = json_build(&v, JSON_BUILD_OBJECT(JSON_BUILD_PAIR("cgroups", JSON_BUILD_VARIANT(arr))));
+        r = sd_json_build(&v, SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("cgroups", SD_JSON_BUILD_VARIANT(arr))));
         if (r < 0)
                 return r;
 
@@ -145,15 +145,15 @@ int manager_varlink_send_managed_oom_update(Unit *u) {
         return r;
 }
 
-static int build_managed_oom_cgroups_json(Manager *m, JsonVariant **ret) {
+static int build_managed_oom_cgroups_json(Manager *m, sd_json_variant **ret) {
         static const UnitType supported_unit_types[] = { UNIT_SLICE, UNIT_SERVICE, UNIT_SCOPE };
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL, *arr = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL, *arr = NULL;
         int r;
 
         assert(m);
         assert(ret);
 
-        r = json_build(&arr, JSON_BUILD_EMPTY_ARRAY);
+        r = sd_json_build(&arr, SD_JSON_BUILD_EMPTY_ARRAY);
         if (r < 0)
                 return r;
 
@@ -171,7 +171,7 @@ static int build_managed_oom_cgroups_json(Manager *m, JsonVariant **ret) {
                                 continue;
 
                         for (size_t j = 0; j < ELEMENTSOF(managed_oom_mode_properties); j++) {
-                                _cleanup_(json_variant_unrefp) JsonVariant *e = NULL;
+                                _cleanup_(sd_json_variant_unrefp) sd_json_variant *e = NULL;
 
                                 /* For the initial varlink call we only care about units that enabled (i.e. mode is not
                                  * set to "auto") oomd properties. */
@@ -183,14 +183,14 @@ static int build_managed_oom_cgroups_json(Manager *m, JsonVariant **ret) {
                                 if (r < 0)
                                         return r;
 
-                                r = json_variant_append_array(&arr, e);
+                                r = sd_json_variant_append_array(&arr, e);
                                 if (r < 0)
                                         return r;
                         }
                 }
         }
 
-        r = json_build(&v, JSON_BUILD_OBJECT(JSON_BUILD_PAIR("cgroups", JSON_BUILD_VARIANT(arr))));
+        r = sd_json_build(&v, SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("cgroups", SD_JSON_BUILD_VARIANT(arr))));
         if (r < 0)
                 return r;
 
@@ -200,18 +200,18 @@ static int build_managed_oom_cgroups_json(Manager *m, JsonVariant **ret) {
 
 static int vl_method_subscribe_managed_oom_cgroups(
                 Varlink *link,
-                JsonVariant *parameters,
+                sd_json_variant *parameters,
                 VarlinkMethodFlags flags,
                 void *userdata) {
 
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         Manager *m = userdata;
         int r;
 
         assert(link);
         assert(m);
 
-        if (json_variant_elements(parameters) > 0)
+        if (sd_json_variant_elements(parameters) > 0)
                 return varlink_error_invalid_parameter(link, parameters);
 
         /* We only take one subscriber for this method so return an error if there's already an existing one.
@@ -232,7 +232,7 @@ static int vl_method_subscribe_managed_oom_cgroups(
 }
 
 static int manager_varlink_send_managed_oom_initial(Manager *m) {
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         int r;
 
         assert(m);
@@ -249,16 +249,16 @@ static int manager_varlink_send_managed_oom_initial(Manager *m) {
         return varlink_send(m->managed_oom_varlink, "io.systemd.oom.ReportManagedOOMCGroups", v);
 }
 
-static int vl_method_get_user_record(Varlink *link, JsonVariant *parameters, VarlinkMethodFlags flags, void *userdata) {
+static int vl_method_get_user_record(Varlink *link, sd_json_variant *parameters, VarlinkMethodFlags flags, void *userdata) {
 
-        static const JsonDispatch dispatch_table[] = {
-                { "uid",      JSON_VARIANT_UNSIGNED, json_dispatch_uid_gid,      offsetof(LookupParameters, uid),       0         },
-                { "userName", JSON_VARIANT_STRING,   json_dispatch_const_string, offsetof(LookupParameters, user_name), JSON_SAFE },
-                { "service",  JSON_VARIANT_STRING,   json_dispatch_const_string, offsetof(LookupParameters, service),   0         },
+        static const sd_json_dispatch_t dispatch_table[] = {
+                { "uid",      SD_JSON_VARIANT_UNSIGNED, sd_json_dispatch_uid_gid,      offsetof(LookupParameters, uid),       0         },
+                { "userName", SD_JSON_VARIANT_STRING,   sd_json_dispatch_const_string, offsetof(LookupParameters, user_name), SD_JSON_SAFE },
+                { "service",  SD_JSON_VARIANT_STRING,   sd_json_dispatch_const_string, offsetof(LookupParameters, service),   0         },
                 {}
         };
 
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         LookupParameters p = {
                 .uid = UID_INVALID,
         };
@@ -271,7 +271,7 @@ static int vl_method_get_user_record(Varlink *link, JsonVariant *parameters, Var
         assert(parameters);
         assert(m);
 
-        r = json_dispatch(parameters, dispatch_table, NULL, 0, &p);
+        r = sd_json_dispatch(parameters, dispatch_table, NULL, 0, &p);
         if (r < 0)
                 return r;
 
@@ -300,7 +300,7 @@ static int vl_method_get_user_record(Varlink *link, JsonVariant *parameters, Var
                                 if (r < 0)
                                         return r;
 
-                                v = json_variant_unref(v);
+                                v = sd_json_variant_unref(v);
                         }
 
                         r = build_user_json(d->name, uid, &v);
@@ -331,18 +331,18 @@ static int vl_method_get_user_record(Varlink *link, JsonVariant *parameters, Var
         return varlink_reply(link, v);
 }
 
-static int build_group_json(const char *group_name, gid_t gid, JsonVariant **ret) {
+static int build_group_json(const char *group_name, gid_t gid, sd_json_variant **ret) {
         assert(group_name);
         assert(gid_is_valid(gid));
         assert(ret);
 
-        return json_build(ret, JSON_BUILD_OBJECT(
-                                   JSON_BUILD_PAIR("record", JSON_BUILD_OBJECT(
-                                       JSON_BUILD_PAIR("groupName", JSON_BUILD_STRING(group_name)),
-                                       JSON_BUILD_PAIR("description", JSON_BUILD_CONST_STRING("Dynamic Group")),
-                                       JSON_BUILD_PAIR("gid", JSON_BUILD_UNSIGNED(gid)),
-                                       JSON_BUILD_PAIR("service", JSON_BUILD_CONST_STRING("io.systemd.DynamicUser")),
-                                       JSON_BUILD_PAIR("disposition", JSON_BUILD_CONST_STRING("dynamic"))))));
+        return sd_json_build(ret, SD_JSON_BUILD_OBJECT(
+                                   SD_JSON_BUILD_PAIR("record", SD_JSON_BUILD_OBJECT(
+                                       SD_JSON_BUILD_PAIR("groupName", SD_JSON_BUILD_STRING(group_name)),
+                                       SD_JSON_BUILD_PAIR("description", SD_JSON_BUILD_CONST_STRING("Dynamic Group")),
+                                       SD_JSON_BUILD_PAIR("gid", SD_JSON_BUILD_UNSIGNED(gid)),
+                                       SD_JSON_BUILD_PAIR("service", SD_JSON_BUILD_CONST_STRING("io.systemd.DynamicUser")),
+                                       SD_JSON_BUILD_PAIR("disposition", SD_JSON_BUILD_CONST_STRING("dynamic"))))));
     }
 
 static bool group_match_lookup_parameters(LookupParameters *p, const char *name, gid_t gid) {
@@ -357,16 +357,16 @@ static bool group_match_lookup_parameters(LookupParameters *p, const char *name,
         return true;
 }
 
-static int vl_method_get_group_record(Varlink *link, JsonVariant *parameters, VarlinkMethodFlags flags, void *userdata) {
+static int vl_method_get_group_record(Varlink *link, sd_json_variant *parameters, VarlinkMethodFlags flags, void *userdata) {
 
-        static const JsonDispatch dispatch_table[] = {
-                { "gid",       JSON_VARIANT_UNSIGNED, json_dispatch_uid_gid,      offsetof(LookupParameters, gid),        0         },
-                { "groupName", JSON_VARIANT_STRING,   json_dispatch_const_string, offsetof(LookupParameters, group_name), JSON_SAFE },
-                { "service",   JSON_VARIANT_STRING,   json_dispatch_const_string, offsetof(LookupParameters, service),    0         },
+        static const sd_json_dispatch_t dispatch_table[] = {
+                { "gid",       SD_JSON_VARIANT_UNSIGNED, sd_json_dispatch_uid_gid,      offsetof(LookupParameters, gid),        0         },
+                { "groupName", SD_JSON_VARIANT_STRING,   sd_json_dispatch_const_string, offsetof(LookupParameters, group_name), SD_JSON_SAFE },
+                { "service",   SD_JSON_VARIANT_STRING,   sd_json_dispatch_const_string, offsetof(LookupParameters, service),    0         },
                 {}
         };
 
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         LookupParameters p = {
                 .gid = GID_INVALID,
         };
@@ -379,7 +379,7 @@ static int vl_method_get_group_record(Varlink *link, JsonVariant *parameters, Va
         assert(parameters);
         assert(m);
 
-        r = json_dispatch(parameters, dispatch_table, NULL, 0, &p);
+        r = sd_json_dispatch(parameters, dispatch_table, NULL, 0, &p);
         if (r < 0)
                 return r;
 
@@ -410,7 +410,7 @@ static int vl_method_get_group_record(Varlink *link, JsonVariant *parameters, Va
                                 if (r < 0)
                                         return r;
 
-                                v = json_variant_unref(v);
+                                v = sd_json_variant_unref(v);
                         }
 
                         r = build_group_json(d->name, (gid_t) uid, &v);
@@ -441,12 +441,12 @@ static int vl_method_get_group_record(Varlink *link, JsonVariant *parameters, Va
         return varlink_reply(link, v);
 }
 
-static int vl_method_get_memberships(Varlink *link, JsonVariant *parameters, VarlinkMethodFlags flags, void *userdata) {
+static int vl_method_get_memberships(Varlink *link, sd_json_variant *parameters, VarlinkMethodFlags flags, void *userdata) {
 
-        static const JsonDispatch dispatch_table[] = {
-                { "userName",  JSON_VARIANT_STRING, json_dispatch_const_string, offsetof(LookupParameters, user_name),  JSON_SAFE },
-                { "groupName", JSON_VARIANT_STRING, json_dispatch_const_string, offsetof(LookupParameters, group_name), JSON_SAFE },
-                { "service",   JSON_VARIANT_STRING, json_dispatch_const_string, offsetof(LookupParameters, service),    0         },
+        static const sd_json_dispatch_t dispatch_table[] = {
+                { "userName",  SD_JSON_VARIANT_STRING, sd_json_dispatch_const_string, offsetof(LookupParameters, user_name),  SD_JSON_SAFE },
+                { "groupName", SD_JSON_VARIANT_STRING, sd_json_dispatch_const_string, offsetof(LookupParameters, group_name), SD_JSON_SAFE },
+                { "service",   SD_JSON_VARIANT_STRING, sd_json_dispatch_const_string, offsetof(LookupParameters, service),    0         },
                 {}
         };
 
@@ -455,7 +455,7 @@ static int vl_method_get_memberships(Varlink *link, JsonVariant *parameters, Var
 
         assert(parameters);
 
-        r = json_dispatch(parameters, dispatch_table, NULL, 0, &p);
+        r = sd_json_dispatch(parameters, dispatch_table, NULL, 0, &p);
         if (r < 0)
                 return r;
 
@@ -528,7 +528,7 @@ static int manager_varlink_init_system(Manager *m) {
         return 1;
 }
 
-static int vl_reply(Varlink *link, JsonVariant *parameters, const char *error_id, VarlinkReplyFlags flags, void *userdata) {
+static int vl_reply(Varlink *link, sd_json_variant *parameters, const char *error_id, VarlinkReplyFlags flags, void *userdata) {
         Manager *m = userdata;
         int r;
 

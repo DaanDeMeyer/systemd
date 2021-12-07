@@ -20,13 +20,13 @@
 #include "strv.h"
 #include "varlink.h"
 
-static JsonDispatchFlags json_dispatch_flags = 0;
+static sd_json_dispatch_flags_t json_dispatch_flags = 0;
 
 static void setup_logging(void) {
         log_parse_environment();
 
         if (DEBUG_LOGGING)
-                json_dispatch_flags = JSON_LOG;
+                json_dispatch_flags = SD_JSON_LOG;
 }
 
 static void setup_logging_once(void) {
@@ -94,17 +94,17 @@ static uint32_t ifindex_to_scopeid(int family, const void *a, int ifindex) {
         return in6_addr_is_link_local(&in6) ? ifindex : 0;
 }
 
-static int json_dispatch_ifindex(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata) {
+static int sd_json_dispatch_ifindex(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata) {
         int *ifi = userdata;
         int64_t t;
 
         assert(variant);
         assert(ifi);
 
-        if (!json_variant_is_integer(variant))
+        if (!sd_json_variant_is_integer(variant))
                 return json_log(variant, flags, SYNTHETIC_ERRNO(EINVAL), "JSON field '%s' is not an integer.", strna(name));
 
-        t = json_variant_integer(variant);
+        t = sd_json_variant_integer(variant);
         if (t > INT_MAX)
                 return json_log(variant, flags, SYNTHETIC_ERRNO(EINVAL), "JSON field '%s' is out of bounds for an interface index.", strna(name));
 
@@ -112,17 +112,17 @@ static int json_dispatch_ifindex(const char *name, JsonVariant *variant, JsonDis
         return 0;
 }
 
-static int json_dispatch_family(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata) {
+static int sd_json_dispatch_family(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata) {
         int *family = userdata;
         int64_t t;
 
         assert(variant);
         assert(family);
 
-        if (!json_variant_is_integer(variant))
+        if (!sd_json_variant_is_integer(variant))
                 return json_log(variant, flags, SYNTHETIC_ERRNO(EINVAL), "JSON field '%s' is not an integer.", strna(name));
 
-        t = json_variant_integer(variant);
+        t = sd_json_variant_integer(variant);
         if (t < 0 || t > INT_MAX)
                 return json_log(variant, flags, SYNTHETIC_ERRNO(EINVAL), "JSON field '%s' is not a valid family.", strna(name));
 
@@ -131,7 +131,7 @@ static int json_dispatch_family(const char *name, JsonVariant *variant, JsonDisp
 }
 
 typedef struct ResolveHostnameReply {
-        JsonVariant *addresses;
+        sd_json_variant *addresses;
         char *name;
         uint64_t flags;
 } ResolveHostnameReply;
@@ -139,14 +139,14 @@ typedef struct ResolveHostnameReply {
 static void resolve_hostname_reply_destroy(ResolveHostnameReply *p) {
         assert(p);
 
-        json_variant_unref(p->addresses);
+        sd_json_variant_unref(p->addresses);
         free(p->name);
 }
 
-static const JsonDispatch resolve_hostname_reply_dispatch_table[] = {
-        { "addresses", JSON_VARIANT_ARRAY,    json_dispatch_variant, offsetof(ResolveHostnameReply, addresses), JSON_MANDATORY },
-        { "name",      JSON_VARIANT_STRING,   json_dispatch_string,  offsetof(ResolveHostnameReply, name),      0              },
-        { "flags",     JSON_VARIANT_UNSIGNED, json_dispatch_uint64,  offsetof(ResolveHostnameReply, flags),     0              },
+static const sd_json_dispatch_t resolve_hostname_reply_dispatch_table[] = {
+        { "addresses", SD_JSON_VARIANT_ARRAY,    sd_json_dispatch_variant, offsetof(ResolveHostnameReply, addresses), SD_JSON_MANDATORY },
+        { "name",      SD_JSON_VARIANT_STRING,   sd_json_dispatch_string,  offsetof(ResolveHostnameReply, name),      0              },
+        { "flags",     SD_JSON_VARIANT_UNSIGNED, sd_json_dispatch_uint64,  offsetof(ResolveHostnameReply, flags),     0              },
         {}
 };
 
@@ -157,29 +157,29 @@ typedef struct AddressParameters {
         size_t address_size;
 } AddressParameters;
 
-static int json_dispatch_address(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata) {
+static int sd_json_dispatch_address(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata) {
         AddressParameters *p = userdata;
         union in_addr_union buf = {};
-        JsonVariant *i;
+        sd_json_variant *i;
         size_t n, k = 0;
 
         assert(variant);
         assert(p);
 
-        if (!json_variant_is_array(variant))
+        if (!sd_json_variant_is_array(variant))
                 return json_log(variant, flags, SYNTHETIC_ERRNO(EINVAL), "JSON field '%s' is not an array.", strna(name));
 
-        n = json_variant_elements(variant);
+        n = sd_json_variant_elements(variant);
         if (!IN_SET(n, 4, 16))
                 return json_log(variant, flags, SYNTHETIC_ERRNO(EINVAL), "JSON field '%s' is array of unexpected size.", strna(name));
 
-        JSON_VARIANT_ARRAY_FOREACH(i, variant) {
+        SD_JSON_VARIANT_ARRAY_FOREACH(i, variant) {
                 int64_t b;
 
-                if (!json_variant_is_integer(i))
+                if (!sd_json_variant_is_integer(i))
                         return json_log(variant, flags, SYNTHETIC_ERRNO(EINVAL), "Element %zu of JSON field '%s' is not an integer.", k, strna(name));
 
-                b = json_variant_integer(i);
+                b = sd_json_variant_integer(i);
                 if (b < 0 || b > 0xff)
                         return json_log(variant, flags, SYNTHETIC_ERRNO(EINVAL), "Element %zu of JSON field '%s' is out of range 0…255.", k, strna(name));
 
@@ -192,10 +192,10 @@ static int json_dispatch_address(const char *name, JsonVariant *variant, JsonDis
         return 0;
 }
 
-static const JsonDispatch address_parameters_dispatch_table[] = {
-        { "ifindex", JSON_VARIANT_INTEGER,  json_dispatch_ifindex, offsetof(AddressParameters, ifindex), 0              },
-        { "family",  JSON_VARIANT_INTEGER,  json_dispatch_family,  offsetof(AddressParameters, family),  JSON_MANDATORY },
-        { "address", JSON_VARIANT_ARRAY,    json_dispatch_address, 0,                                    JSON_MANDATORY },
+static const sd_json_dispatch_t address_parameters_dispatch_table[] = {
+        { "ifindex", SD_JSON_VARIANT_INTEGER,  sd_json_dispatch_ifindex, offsetof(AddressParameters, ifindex), 0              },
+        { "family",  SD_JSON_VARIANT_INTEGER,  sd_json_dispatch_family,  offsetof(AddressParameters, family),  SD_JSON_MANDATORY },
+        { "address", SD_JSON_VARIANT_ARRAY,    sd_json_dispatch_address, 0,                                    SD_JSON_MANDATORY },
         {}
 };
 
@@ -222,9 +222,9 @@ enum nss_status _nss_resolve_gethostbyname4_r(
                 int32_t *ttlp) {
 
         _cleanup_(varlink_unrefp) Varlink *link = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *cparams = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *cparams = NULL;
         _cleanup_(resolve_hostname_reply_destroy) ResolveHostnameReply p = {};
-        JsonVariant *rparams, *entry;
+        sd_json_variant *rparams, *entry;
         int r;
 
         PROTECT_ERRNO;
@@ -240,9 +240,9 @@ enum nss_status _nss_resolve_gethostbyname4_r(
         if (r < 0)
                 goto fail;
 
-        r = json_build(&cparams, JSON_BUILD_OBJECT(
-                                       JSON_BUILD_PAIR("name", JSON_BUILD_STRING(name)),
-                                       JSON_BUILD_PAIR("flags", JSON_BUILD_UNSIGNED(query_flags()))));
+        r = sd_json_build(&cparams, SD_JSON_BUILD_OBJECT(
+                                       SD_JSON_BUILD_PAIR("name", SD_JSON_BUILD_STRING(name)),
+                                       SD_JSON_BUILD_PAIR("flags", SD_JSON_BUILD_UNSIGNED(query_flags()))));
         if (r < 0)
                 goto fail;
 
@@ -263,17 +263,17 @@ enum nss_status _nss_resolve_gethostbyname4_r(
                 goto not_found;
         }
 
-        r = json_dispatch(rparams, resolve_hostname_reply_dispatch_table, NULL, json_dispatch_flags, &p);
+        r = sd_json_dispatch(rparams, resolve_hostname_reply_dispatch_table, NULL, json_dispatch_flags, &p);
         if (r < 0)
                 goto fail;
-        if (json_variant_is_blank_object(p.addresses))
+        if (sd_json_variant_is_blank_object(p.addresses))
                 goto not_found;
 
         size_t n_addresses = 0;
-        JSON_VARIANT_ARRAY_FOREACH(entry, p.addresses) {
+        SD_JSON_VARIANT_ARRAY_FOREACH(entry, p.addresses) {
                 AddressParameters q = {};
 
-                r = json_dispatch(entry, address_parameters_dispatch_table, NULL, json_dispatch_flags, &q);
+                r = sd_json_dispatch(entry, address_parameters_dispatch_table, NULL, json_dispatch_flags, &q);
                 if (r < 0)
                         goto fail;
 
@@ -308,10 +308,10 @@ enum nss_status _nss_resolve_gethostbyname4_r(
         struct gaih_addrtuple *r_tuple = NULL,
                 *r_tuple_first = (struct gaih_addrtuple*) (buffer + idx);
 
-        JSON_VARIANT_ARRAY_FOREACH(entry, p.addresses) {
+        SD_JSON_VARIANT_ARRAY_FOREACH(entry, p.addresses) {
                 AddressParameters q = {};
 
-                r = json_dispatch(entry, address_parameters_dispatch_table, NULL, json_dispatch_flags, &q);
+                r = sd_json_dispatch(entry, address_parameters_dispatch_table, NULL, json_dispatch_flags, &q);
                 if (r < 0)
                         goto fail;
 
@@ -375,9 +375,9 @@ enum nss_status _nss_resolve_gethostbyname3_r(
                 char **canonp) {
 
         _cleanup_(varlink_unrefp) Varlink *link = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *cparams = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *cparams = NULL;
         _cleanup_(resolve_hostname_reply_destroy) ResolveHostnameReply p = {};
-        JsonVariant *rparams, *entry;
+        sd_json_variant *rparams, *entry;
         int r;
 
         PROTECT_ERRNO;
@@ -401,9 +401,9 @@ enum nss_status _nss_resolve_gethostbyname3_r(
         if (r < 0)
                 goto fail;
 
-        r = json_build(&cparams, JSON_BUILD_OBJECT(JSON_BUILD_PAIR("name", JSON_BUILD_STRING(name)),
-                                                   JSON_BUILD_PAIR("family", JSON_BUILD_INTEGER(af)),
-                                                   JSON_BUILD_PAIR("flags", JSON_BUILD_UNSIGNED(query_flags()))));
+        r = sd_json_build(&cparams, SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("name", SD_JSON_BUILD_STRING(name)),
+                                                   SD_JSON_BUILD_PAIR("family", SD_JSON_BUILD_INTEGER(af)),
+                                                   SD_JSON_BUILD_PAIR("flags", SD_JSON_BUILD_UNSIGNED(query_flags()))));
         if (r < 0)
                 goto fail;
 
@@ -419,17 +419,17 @@ enum nss_status _nss_resolve_gethostbyname3_r(
                 goto not_found;
         }
 
-        r = json_dispatch(rparams, resolve_hostname_reply_dispatch_table, NULL, json_dispatch_flags, &p);
+        r = sd_json_dispatch(rparams, resolve_hostname_reply_dispatch_table, NULL, json_dispatch_flags, &p);
         if (r < 0)
                 goto fail;
-        if (json_variant_is_blank_object(p.addresses))
+        if (sd_json_variant_is_blank_object(p.addresses))
                 goto not_found;
 
         size_t n_addresses = 0;
-        JSON_VARIANT_ARRAY_FOREACH(entry, p.addresses) {
+        SD_JSON_VARIANT_ARRAY_FOREACH(entry, p.addresses) {
                 AddressParameters q = {};
 
-                r = json_dispatch(entry, address_parameters_dispatch_table, NULL, json_dispatch_flags, &q);
+                r = sd_json_dispatch(entry, address_parameters_dispatch_table, NULL, json_dispatch_flags, &q);
                 if (r < 0)
                         goto fail;
 
@@ -472,10 +472,10 @@ enum nss_status _nss_resolve_gethostbyname3_r(
         char *r_addr = buffer + idx;
 
         size_t i = 0;
-        JSON_VARIANT_ARRAY_FOREACH(entry, p.addresses) {
+        SD_JSON_VARIANT_ARRAY_FOREACH(entry, p.addresses) {
                 AddressParameters q = {};
 
-                r = json_dispatch(entry, address_parameters_dispatch_table, NULL, json_dispatch_flags, &q);
+                r = sd_json_dispatch(entry, address_parameters_dispatch_table, NULL, json_dispatch_flags, &q);
                 if (r < 0)
                         goto fail;
 
@@ -541,19 +541,19 @@ try_again:
 }
 
 typedef struct ResolveAddressReply {
-        JsonVariant *names;
+        sd_json_variant *names;
         uint64_t flags;
 } ResolveAddressReply;
 
 static void resolve_address_reply_destroy(ResolveAddressReply *p) {
         assert(p);
 
-        json_variant_unref(p->names);
+        sd_json_variant_unref(p->names);
 }
 
-static const JsonDispatch resolve_address_reply_dispatch_table[] = {
-        { "names", JSON_VARIANT_ARRAY,    json_dispatch_variant, offsetof(ResolveAddressReply, names), JSON_MANDATORY },
-        { "flags", JSON_VARIANT_UNSIGNED, json_dispatch_uint64,  offsetof(ResolveAddressReply, flags), 0              },
+static const sd_json_dispatch_t resolve_address_reply_dispatch_table[] = {
+        { "names", SD_JSON_VARIANT_ARRAY,    sd_json_dispatch_variant, offsetof(ResolveAddressReply, names), SD_JSON_MANDATORY },
+        { "flags", SD_JSON_VARIANT_UNSIGNED, sd_json_dispatch_uint64,  offsetof(ResolveAddressReply, flags), 0              },
         {}
 };
 
@@ -568,9 +568,9 @@ static void name_parameters_destroy(NameParameters *p) {
         free(p->name);
 }
 
-static const JsonDispatch name_parameters_dispatch_table[] = {
-        { "ifindex", JSON_VARIANT_INTEGER, json_dispatch_ifindex, offsetof(NameParameters, ifindex), 0              },
-        { "name",    JSON_VARIANT_STRING,  json_dispatch_string,  offsetof(NameParameters, name),    JSON_MANDATORY },
+static const sd_json_dispatch_t name_parameters_dispatch_table[] = {
+        { "ifindex", SD_JSON_VARIANT_INTEGER, sd_json_dispatch_ifindex, offsetof(NameParameters, ifindex), 0              },
+        { "name",    SD_JSON_VARIANT_STRING,  sd_json_dispatch_string,  offsetof(NameParameters, name),    SD_JSON_MANDATORY },
         {}
 };
 
@@ -583,9 +583,9 @@ enum nss_status _nss_resolve_gethostbyaddr2_r(
                 int32_t *ttlp) {
 
         _cleanup_(varlink_unrefp) Varlink *link = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *cparams = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *cparams = NULL;
         _cleanup_(resolve_address_reply_destroy) ResolveAddressReply p = {};
-        JsonVariant *rparams, *entry;
+        sd_json_variant *rparams, *entry;
         int r;
 
         PROTECT_ERRNO;
@@ -613,9 +613,9 @@ enum nss_status _nss_resolve_gethostbyaddr2_r(
         if (r < 0)
                 goto fail;
 
-        r = json_build(&cparams, JSON_BUILD_OBJECT(JSON_BUILD_PAIR("address", JSON_BUILD_BYTE_ARRAY(addr, len)),
-                                                   JSON_BUILD_PAIR("family", JSON_BUILD_INTEGER(af)),
-                                                   JSON_BUILD_PAIR("flags", JSON_BUILD_UNSIGNED(query_flags()))));
+        r = sd_json_build(&cparams, SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("address", SD_JSON_BUILD_BYTE_ARRAY(addr, len)),
+                                                   SD_JSON_BUILD_PAIR("family", SD_JSON_BUILD_INTEGER(af)),
+                                                   SD_JSON_BUILD_PAIR("flags", SD_JSON_BUILD_UNSIGNED(query_flags()))));
         if (r < 0)
                 goto fail;
 
@@ -631,25 +631,25 @@ enum nss_status _nss_resolve_gethostbyaddr2_r(
                 goto not_found;
         }
 
-        r = json_dispatch(rparams, resolve_address_reply_dispatch_table, NULL, json_dispatch_flags, &p);
+        r = sd_json_dispatch(rparams, resolve_address_reply_dispatch_table, NULL, json_dispatch_flags, &p);
         if (r < 0)
                 goto fail;
-        if (json_variant_is_blank_object(p.names))
+        if (sd_json_variant_is_blank_object(p.names))
                 goto not_found;
 
         size_t ms = 0, idx;
 
-        JSON_VARIANT_ARRAY_FOREACH(entry, p.names) {
+        SD_JSON_VARIANT_ARRAY_FOREACH(entry, p.names) {
                 _cleanup_(name_parameters_destroy) NameParameters q = {};
 
-                r = json_dispatch(entry, name_parameters_dispatch_table, NULL, json_dispatch_flags, &q);
+                r = sd_json_dispatch(entry, name_parameters_dispatch_table, NULL, json_dispatch_flags, &q);
                 if (r < 0)
                         goto fail;
 
                 ms += ALIGN(strlen(q.name) + 1);
         }
 
-        size_t n_names = json_variant_elements(p.names);
+        size_t n_names = sd_json_variant_elements(p.names);
         ms += ALIGN(len) +                    /* the address */
               2 * sizeof(char*) +             /* pointer to the address, plus trailing NULL */
               n_names * sizeof(char*);        /* pointers to aliases, plus trailing NULL */
@@ -680,10 +680,10 @@ enum nss_status _nss_resolve_gethostbyaddr2_r(
         char *r_name = buffer + idx;
 
         size_t i = 0;
-        JSON_VARIANT_ARRAY_FOREACH(entry, p.names) {
+        SD_JSON_VARIANT_ARRAY_FOREACH(entry, p.names) {
                 _cleanup_(name_parameters_destroy) NameParameters q = {};
 
-                r = json_dispatch(entry, name_parameters_dispatch_table, NULL, json_dispatch_flags, &q);
+                r = sd_json_dispatch(entry, name_parameters_dispatch_table, NULL, json_dispatch_flags, &q);
                 if (r < 0)
                         goto fail;
 

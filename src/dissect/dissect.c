@@ -54,7 +54,7 @@ static DissectImageFlags arg_flags =
         DISSECT_IMAGE_USR_NO_ROOT |
         DISSECT_IMAGE_GROWFS;
 static VeritySettings arg_verity_settings = VERITY_SETTINGS_DEFAULT;
-static JsonFormatFlags arg_json_format_flags = JSON_FORMAT_OFF;
+static sd_json_format_flags_t arg_json_format_flags = SD_JSON_FORMAT_OFF;
 static PagerFlags arg_pager_flags = 0;
 static bool arg_legend = true;
 
@@ -352,7 +352,7 @@ static int parse_argv(int argc, char *argv[]) {
         return 1;
 }
 
-static int strv_pair_to_json(char **l, JsonVariant **ret) {
+static int strv_pair_to_json(char **l, sd_json_variant **ret) {
         _cleanup_strv_free_ char **jl = NULL;
         char **a, **b;
 
@@ -367,7 +367,7 @@ static int strv_pair_to_json(char **l, JsonVariant **ret) {
                         return log_oom();
         }
 
-        return json_variant_new_array_strv(ret, jl);
+        return sd_json_variant_new_array_strv(ret, jl);
 }
 
 static void strv_pair_print(char **l, const char *prefix) {
@@ -411,7 +411,7 @@ static int get_sysext_scopes(DissectedImage *m, char ***ret_scopes) {
 }
 
 static int action_dissect(DissectedImage *m, LoopDevice *d) {
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         _cleanup_(table_unrefp) Table *t = NULL;
         uint64_t size = UINT64_MAX;
         int r;
@@ -419,18 +419,18 @@ static int action_dissect(DissectedImage *m, LoopDevice *d) {
         assert(m);
         assert(d);
 
-        if (arg_json_format_flags & (JSON_FORMAT_OFF|JSON_FORMAT_PRETTY|JSON_FORMAT_PRETTY_AUTO))
+        if (arg_json_format_flags & (SD_JSON_FORMAT_OFF|SD_JSON_FORMAT_PRETTY|SD_JSON_FORMAT_PRETTY_AUTO))
                 pager_open(arg_pager_flags);
 
-        if (arg_json_format_flags & JSON_FORMAT_OFF)
+        if (arg_json_format_flags & SD_JSON_FORMAT_OFF)
                 printf("      Name: %s\n", basename(arg_image));
 
         if (ioctl(d->fd, BLKGETSIZE64, &size) < 0)
                 log_debug_errno(errno, "Failed to query size of loopback device: %m");
-        else if (arg_json_format_flags & JSON_FORMAT_OFF)
+        else if (arg_json_format_flags & SD_JSON_FORMAT_OFF)
                 printf("      Size: %s\n", FORMAT_BYTES(size));
 
-        if (arg_json_format_flags & JSON_FORMAT_OFF)
+        if (arg_json_format_flags & SD_JSON_FORMAT_OFF)
                 putc('\n', stdout);
 
         r = dissected_image_acquire_metadata(m, 0);
@@ -446,7 +446,7 @@ static int action_dissect(DissectedImage *m, LoopDevice *d) {
                 log_warning_errno(r, "OS image is currently in use, proceeding without showing OS image metadata.");
         else if (r < 0)
                 return log_error_errno(r, "Failed to acquire image metadata: %m");
-        else if (arg_json_format_flags & JSON_FORMAT_OFF) {
+        else if (arg_json_format_flags & SD_JSON_FORMAT_OFF) {
                 _cleanup_strv_free_ char **sysext_scopes = NULL;
 
                 if (m->hostname)
@@ -490,7 +490,7 @@ static int action_dissect(DissectedImage *m, LoopDevice *d) {
 
                 putc('\n', stdout);
         } else {
-                _cleanup_(json_variant_unrefp) JsonVariant *mi = NULL, *osr = NULL, *exr = NULL;
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *mi = NULL, *osr = NULL, *exr = NULL;
                 _cleanup_strv_free_ char **sysext_scopes = NULL;
 
                 if (!strv_isempty(m->machine_info)) {
@@ -515,20 +515,20 @@ static int action_dissect(DissectedImage *m, LoopDevice *d) {
                 if (r < 0)
                         return log_error_errno(r, "Failed to parse SYSEXT_SCOPE: %m");
 
-                r = json_build(&v, JSON_BUILD_OBJECT(
-                                               JSON_BUILD_PAIR("name", JSON_BUILD_STRING(basename(arg_image))),
-                                               JSON_BUILD_PAIR("size", JSON_BUILD_INTEGER(size)),
-                                               JSON_BUILD_PAIR_CONDITION(m->hostname, "hostname", JSON_BUILD_STRING(m->hostname)),
-                                               JSON_BUILD_PAIR_CONDITION(!sd_id128_is_null(m->machine_id), "machineId", JSON_BUILD_ID128(m->machine_id)),
-                                               JSON_BUILD_PAIR_CONDITION(mi, "machineInfo", JSON_BUILD_VARIANT(mi)),
-                                               JSON_BUILD_PAIR_CONDITION(osr, "osRelease", JSON_BUILD_VARIANT(osr)),
-                                               JSON_BUILD_PAIR_CONDITION(exr, "extensionRelease", JSON_BUILD_VARIANT(exr)),
-                                               JSON_BUILD_PAIR("useBootableUefi", JSON_BUILD_BOOLEAN(m->partitions[PARTITION_ESP].found)),
-                                               JSON_BUILD_PAIR_CONDITION(m->has_init_system >= 0, "useBootableContainer", JSON_BUILD_BOOLEAN(m->has_init_system)),
-                                               JSON_BUILD_PAIR("usePortableService", JSON_BUILD_BOOLEAN(strv_env_pairs_get(m->os_release, "PORTABLE_MATCHES"))),
-                                               JSON_BUILD_PAIR("useSystemExtension", JSON_BUILD_BOOLEAN(strv_contains(sysext_scopes, "system"))),
-                                               JSON_BUILD_PAIR("useInitRDExtension", JSON_BUILD_BOOLEAN(strv_contains(sysext_scopes, "initrd"))),
-                                               JSON_BUILD_PAIR("usePortableExtension", JSON_BUILD_BOOLEAN(strv_contains(sysext_scopes, "portable")))));
+                r = sd_json_build(&v, SD_JSON_BUILD_OBJECT(
+                                               SD_JSON_BUILD_PAIR("name", SD_JSON_BUILD_STRING(basename(arg_image))),
+                                               SD_JSON_BUILD_PAIR("size", SD_JSON_BUILD_INTEGER(size)),
+                                               SD_JSON_BUILD_PAIR_CONDITION(m->hostname, "hostname", SD_JSON_BUILD_STRING(m->hostname)),
+                                               SD_JSON_BUILD_PAIR_CONDITION(!sd_id128_is_null(m->machine_id), "machineId", SD_JSON_BUILD_ID128(m->machine_id)),
+                                               SD_JSON_BUILD_PAIR_CONDITION(mi, "machineInfo", SD_JSON_BUILD_VARIANT(mi)),
+                                               SD_JSON_BUILD_PAIR_CONDITION(osr, "osRelease", SD_JSON_BUILD_VARIANT(osr)),
+                                               SD_JSON_BUILD_PAIR_CONDITION(exr, "extensionRelease", SD_JSON_BUILD_VARIANT(exr)),
+                                               SD_JSON_BUILD_PAIR("useBootableUefi", SD_JSON_BUILD_BOOLEAN(m->partitions[PARTITION_ESP].found)),
+                                               SD_JSON_BUILD_PAIR_CONDITION(m->has_init_system >= 0, "useBootableContainer", SD_JSON_BUILD_BOOLEAN(m->has_init_system)),
+                                               SD_JSON_BUILD_PAIR("usePortableService", SD_JSON_BUILD_BOOLEAN(strv_env_pairs_get(m->os_release, "PORTABLE_MATCHES"))),
+                                               SD_JSON_BUILD_PAIR("useSystemExtension", SD_JSON_BUILD_BOOLEAN(strv_contains(sysext_scopes, "system"))),
+                                               SD_JSON_BUILD_PAIR("useInitRDExtension", SD_JSON_BUILD_BOOLEAN(strv_contains(sysext_scopes, "initrd"))),
+                                               SD_JSON_BUILD_PAIR("usePortableExtension", SD_JSON_BUILD_BOOLEAN(strv_contains(sysext_scopes, "portable")))));
                 if (r < 0)
                         return log_oom();
         }
@@ -600,24 +600,24 @@ static int action_dissect(DissectedImage *m, LoopDevice *d) {
                         return table_log_add_error(r);
         }
 
-        if (arg_json_format_flags & JSON_FORMAT_OFF) {
+        if (arg_json_format_flags & SD_JSON_FORMAT_OFF) {
                 (void) table_set_header(t, arg_legend);
 
                 r = table_print(t, NULL);
                 if (r < 0)
                         return table_log_print_error(r);
         } else {
-                _cleanup_(json_variant_unrefp) JsonVariant *jt = NULL;
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *jt = NULL;
 
                 r = table_to_json(t, &jt);
                 if (r < 0)
                         return log_error_errno(r, "Failed to convert table to JSON: %m");
 
-                r = json_variant_set_field(&v, "mounts", jt);
+                r = sd_json_variant_set_field(&v, "mounts", jt);
                 if (r < 0)
                         return log_oom();
 
-                json_variant_dump(v, arg_json_format_flags, stdout, NULL);
+                sd_json_variant_dump(v, arg_json_format_flags, stdout, NULL);
         }
 
         return 0;

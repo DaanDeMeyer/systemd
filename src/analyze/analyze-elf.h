@@ -3,4 +3,4 @@
 
 #include "sd-json.h"
 
-int analyze_elf(char **filenames, JsonFormatFlags json_flags);
+int analyze_elf(char **filenames, sd_json_format_flags_t json_flags);

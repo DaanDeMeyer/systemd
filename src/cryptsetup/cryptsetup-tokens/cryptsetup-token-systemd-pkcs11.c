@@ -112,31 +112,31 @@ _public_ int cryptsetup_token_validate(
                 const char *json /* contains valid 'type' and 'keyslots' fields. 'type' is 'systemd-pkcs11' */) {
 
         int r;
-        JsonVariant *w;
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        sd_json_variant *w;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
 
-        r = json_parse(json, 0, &v, NULL, NULL);
+        r = sd_json_parse(json, 0, &v, NULL, NULL);
         if (r < 0)
                 return crypt_log_debug_errno(cd, r, "Could not parse " TOKEN_NAME " json object: %m.");
 
-        w = json_variant_by_key(v, "pkcs11-uri");
-        if (!w || !json_variant_is_string(w)) {
+        w = sd_json_variant_by_key(v, "pkcs11-uri");
+        if (!w || !sd_json_variant_is_string(w)) {
                 crypt_log_debug(cd, "PKCS#11 token data lacks 'pkcs11-uri' field.");
                 return 1;
         }
 
-        if (!pkcs11_uri_valid(json_variant_string(w))) {
+        if (!pkcs11_uri_valid(sd_json_variant_string(w))) {
                 crypt_log_debug(cd, "PKCS#11 token data contains invalid PKCS#11 URI.");
                 return 1;
         }
 
-        w = json_variant_by_key(v, "pkcs11-key");
-        if (!w || !json_variant_is_string(w)) {
+        w = sd_json_variant_by_key(v, "pkcs11-key");
+        if (!w || !sd_json_variant_is_string(w)) {
                 crypt_log_debug(cd, "PKCS#11 token data lacks 'pkcs11-key' field.");
                 return 1;
         }
 
-        r = unbase64mem(json_variant_string(w), SIZE_MAX, NULL, NULL);
+        r = unbase64mem(sd_json_variant_string(w), SIZE_MAX, NULL, NULL);
         if (r < 0)
                 return crypt_log_debug_errno(cd, r, "Failed to decode base64 encoded key: %m.");
 

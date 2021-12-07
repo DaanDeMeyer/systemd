@@ -8,8 +8,8 @@
 #include "systemctl-util.h"
 #include "systemctl.h"
 
-static int json_transform_message(sd_bus_message *m, JsonVariant **ret) {
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+static int json_transform_message(sd_bus_message *m, sd_json_variant **ret) {
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         char *text;
         int r;
 
@@ -17,7 +17,7 @@ static int json_transform_message(sd_bus_message *m, JsonVariant **ret) {
         assert(ret);
 
         while ((r = sd_bus_message_read_basic(m, SD_BUS_TYPE_STRING, &text)) > 0) {
-                _cleanup_(json_variant_unrefp) JsonVariant *w = NULL;
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *w = NULL;
 
                 char *sep = strchr(text, '=');
                 if (!sep)
@@ -26,11 +26,11 @@ static int json_transform_message(sd_bus_message *m, JsonVariant **ret) {
 
                 *sep++ = '\0';
 
-                r = json_build(&w, JSON_BUILD_OBJECT(JSON_BUILD_PAIR(text, JSON_BUILD_STRING(sep))));
+                r = sd_json_build(&w, SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR(text, SD_JSON_BUILD_STRING(sep))));
                 if (r < 0)
                         return r;
 
-                r = json_variant_merge(&v, w);
+                r = sd_json_variant_merge(&v, w);
                 if (r < 0)
                         return r;
         }
@@ -81,14 +81,14 @@ int show_environment(int argc, char *argv[], void *userdata) {
                 return bus_log_parse_error(r);
 
         if (OUTPUT_MODE_IS_JSON(arg_output)) {
-                _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
-                JsonFormatFlags flags = output_mode_to_json_format_flags(arg_output);
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
+                sd_json_format_flags_t flags = output_mode_to_json_format_flags(arg_output);
 
                 r = json_transform_message(reply, &v);
                 if (r < 0)
                         return r;
 
-                json_variant_dump(v, flags, stdout, NULL);
+                sd_json_variant_dump(v, flags, stdout, NULL);
         } else {
                 while ((r = sd_bus_message_read_basic(reply, SD_BUS_TYPE_STRING, &text)) > 0) {
                         r = print_variable(text);

@@ -2,10 +2,10 @@
 /* Limit the number of expressions to 6 for performance reasons */
 @@
 expression e;
-/* Exclude JsonVariant * from the transformation, as it can't work with the
+/* Exclude sd_json_variant * from the transformation, as it can't work with the
  * current version of the IN_SET macro */
-typedef JsonVariant;
-type T != JsonVariant*;
+typedef sd_json_variant;
+type T != sd_json_variant*;
 constant T n0, n1, n2, n3, n4, n5;
 @@
 (

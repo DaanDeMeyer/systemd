@@ -5,4 +5,4 @@
 
 #include "libfido2-util.h"
 
-int identity_add_fido2_parameters(JsonVariant **v, const char *device, Fido2EnrollFlags lock_with);
+int identity_add_fido2_parameters(sd_json_variant **v, const char *device, Fido2EnrollFlags lock_with);

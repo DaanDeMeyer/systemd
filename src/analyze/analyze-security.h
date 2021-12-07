@@ -17,7 +17,7 @@ typedef enum AnalyzeSecurityFlags {
 
 int analyze_security(sd_bus *bus,
                      char **units,
-                     JsonVariant *policy,
+                     sd_json_variant *policy,
                      UnitFileScope scope,
                      bool check_man,
                      bool run_generators,
@@ -25,6 +25,6 @@ int analyze_security(sd_bus *bus,
                      unsigned threshold,
                      const char *root,
                      const char *profile,
-                     JsonFormatFlags json_format_flags,
+                     sd_json_format_flags_t json_format_flags,
                      PagerFlags pager_flags,
                      AnalyzeSecurityFlags flags);

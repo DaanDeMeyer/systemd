@@ -165,9 +165,9 @@ static inline UserRecordMask USER_RECORD_STRIP_MASK(UserRecordLoadFlags f) {
         return (f >> 21) & _USER_RECORD_MASK_MAX;
 }
 
-static inline JsonDispatchFlags USER_RECORD_LOAD_FLAGS_TO_JSON_DISPATCH_FLAGS(UserRecordLoadFlags flags) {
-        return (FLAGS_SET(flags, USER_RECORD_LOG) ? JSON_LOG : 0) |
-                (FLAGS_SET(flags, USER_RECORD_PERMISSIVE) ? JSON_PERMISSIVE : 0);
+static inline sd_json_dispatch_flags_t USER_RECORD_LOAD_FLAGS_TO_sd_json_dispatch_FLAGS(UserRecordLoadFlags flags) {
+        return (FLAGS_SET(flags, USER_RECORD_LOG) ? SD_JSON_LOG : 0) |
+                (FLAGS_SET(flags, USER_RECORD_PERMISSIVE) ? SD_JSON_PERMISSIVE : 0);
 }
 
 typedef struct Pkcs11EncryptedKey {
@@ -364,7 +364,7 @@ typedef struct UserRecord {
         RecoveryKey *recovery_key;
         size_t n_recovery_key;
 
-        JsonVariant *json;
+        sd_json_variant *json;
 } UserRecord;
 
 UserRecord* user_record_new(void);
@@ -373,7 +373,7 @@ UserRecord* user_record_unref(UserRecord *h);
 
 DEFINE_TRIVIAL_CLEANUP_FUNC(UserRecord*, user_record_unref);
 
-int user_record_load(UserRecord *h, JsonVariant *v, UserRecordLoadFlags flags);
+int user_record_load(UserRecord *h, sd_json_variant *v, UserRecordLoadFlags flags);
 int user_record_build(UserRecord **ret, ...);
 
 const char *user_record_user_name_and_realm(UserRecord *h);
@@ -422,14 +422,14 @@ int user_record_test_blocked(UserRecord *h);
 int user_record_test_password_change_required(UserRecord *h);
 
 /* The following six are user by group-record.c, that's why we export them here */
-int json_dispatch_realm(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_gecos(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_user_group_list(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_user_disposition(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
+int sd_json_dispatch_realm(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_gecos(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_user_group_list(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_user_disposition(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
 
-int per_machine_id_match(JsonVariant *ids, JsonDispatchFlags flags);
-int per_machine_hostname_match(JsonVariant *hns, JsonDispatchFlags flags);
-int user_group_record_mangle(JsonVariant *v, UserRecordLoadFlags load_flags, JsonVariant **ret_variant, UserRecordMask *ret_mask);
+int per_machine_id_match(sd_json_variant *ids, sd_json_dispatch_flags_t flags);
+int per_machine_hostname_match(sd_json_variant *hns, sd_json_dispatch_flags_t flags);
+int user_group_record_mangle(sd_json_variant *v, UserRecordLoadFlags load_flags, sd_json_variant **ret_variant, UserRecordMask *ret_mask);
 
 const char* user_storage_to_string(UserStorage t) _const_;
 UserStorage user_storage_from_string(const char *s) _pure_;

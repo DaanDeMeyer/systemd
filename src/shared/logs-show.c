@@ -888,9 +888,9 @@ void json_escape(
 }
 
 struct json_data {
-        JsonVariant* name;
+        sd_json_variant* name;
         size_t n_values;
-        JsonVariant* values[];
+        sd_json_variant* values[];
 };
 
 static int update_json_data(
@@ -900,16 +900,16 @@ static int update_json_data(
                 const void *value,
                 size_t size) {
 
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         struct json_data *d;
         int r;
 
         if (!(flags & OUTPUT_SHOW_ALL) && strlen(name) + 1 + size >= JSON_THRESHOLD)
-                r = json_variant_new_null(&v);
+                r = sd_json_variant_new_null(&v);
         else if (utf8_is_printable(value, size))
-                r = json_variant_new_stringn(&v, value, size);
+                r = sd_json_variant_new_stringn(&v, value, size);
         else
-                r = json_variant_new_array_bytes(&v, value, size);
+                r = sd_json_variant_new_array_bytes(&v, value, size);
         if (r < 0)
                 return log_error_errno(r, "Failed to allocate JSON data: %m");
 
@@ -917,24 +917,24 @@ static int update_json_data(
         if (d) {
                 struct json_data *w;
 
-                w = realloc(d, offsetof(struct json_data, values) + sizeof(JsonVariant*) * (d->n_values + 1));
+                w = realloc(d, offsetof(struct json_data, values) + sizeof(sd_json_variant*) * (d->n_values + 1));
                 if (!w)
                         return log_oom();
 
                 d = w;
-                assert_se(hashmap_update(h, json_variant_string(d->name), d) >= 0);
+                assert_se(hashmap_update(h, sd_json_variant_string(d->name), d) >= 0);
         } else {
-                _cleanup_(json_variant_unrefp) JsonVariant *n = NULL;
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *n = NULL;
 
-                r = json_variant_new_string(&n, name);
+                r = sd_json_variant_new_string(&n, name);
                 if (r < 0)
                         return log_error_errno(r, "Failed to allocate JSON name variant: %m");
 
-                d = malloc0(offsetof(struct json_data, values) + sizeof(JsonVariant*));
+                d = malloc0(offsetof(struct json_data, values) + sizeof(sd_json_variant*));
                 if (!d)
                         return log_oom();
 
-                r = hashmap_put(h, json_variant_string(n), d);
+                r = hashmap_put(h, sd_json_variant_string(n), d);
                 if (r < 0) {
                         free(d);
                         return log_error_errno(r, "Failed to insert JSON name into hashmap: %m");
@@ -989,10 +989,10 @@ static int output_json(
                 const size_t highlight[2]) {
 
         char sid[SD_ID128_STRING_MAX], usecbuf[DECIMAL_STR_MAX(usec_t)];
-        _cleanup_(json_variant_unrefp) JsonVariant *object = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *object = NULL;
         _cleanup_free_ char *cursor = NULL;
         uint64_t realtime, monotonic;
-        JsonVariant **array = NULL;
+        sd_json_variant **array = NULL;
         struct json_data *d;
         sd_id128_t boot_id;
         Hashmap *h = NULL;
@@ -1060,7 +1060,7 @@ static int output_json(
                         goto finish;
         }
 
-        array = new(JsonVariant*, hashmap_size(h)*2);
+        array = new(sd_json_variant*, hashmap_size(h)*2);
         if (!array) {
                 r = log_oom();
                 goto finish;
@@ -1069,14 +1069,14 @@ static int output_json(
         HASHMAP_FOREACH(d, h) {
                 assert(d->n_values > 0);
 
-                array[n++] = json_variant_ref(d->name);
+                array[n++] = sd_json_variant_ref(d->name);
 
                 if (d->n_values == 1)
-                        array[n++] = json_variant_ref(d->values[0]);
+                        array[n++] = sd_json_variant_ref(d->values[0]);
                 else {
-                        _cleanup_(json_variant_unrefp) JsonVariant *q = NULL;
+                        _cleanup_(sd_json_variant_unrefp) sd_json_variant *q = NULL;
 
-                        r = json_variant_new_array(&q, d->values, d->n_values);
+                        r = sd_json_variant_new_array(&q, d->values, d->n_values);
                         if (r < 0) {
                                 log_error_errno(r, "Failed to create JSON array: %m");
                                 goto finish;
@@ -1086,15 +1086,15 @@ static int output_json(
                 }
         }
 
-        r = json_variant_new_object(&object, array, n);
+        r = sd_json_variant_new_object(&object, array, n);
         if (r < 0) {
                 log_error_errno(r, "Failed to allocate JSON object: %m");
                 goto finish;
         }
 
-        json_variant_dump(object,
+        sd_json_variant_dump(object,
                           output_mode_to_json_format_flags(mode) |
-                          (FLAGS_SET(flags, OUTPUT_COLOR) ? JSON_FORMAT_COLOR : 0),
+                          (FLAGS_SET(flags, OUTPUT_COLOR) ? SD_JSON_FORMAT_COLOR : 0),
                           f, NULL);
 
         r = 0;
@@ -1103,16 +1103,16 @@ finish:
         while ((d = hashmap_steal_first(h))) {
                 size_t k;
 
-                json_variant_unref(d->name);
+                sd_json_variant_unref(d->name);
                 for (k = 0; k < d->n_values; k++)
-                        json_variant_unref(d->values[k]);
+                        sd_json_variant_unref(d->values[k]);
 
                 free(d);
         }
 
         hashmap_free(h);
 
-        json_variant_unref_many(array, n);
+        sd_json_variant_unref_many(array, n);
         free(array);
 
         return r;

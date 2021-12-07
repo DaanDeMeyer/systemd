@@ -1026,7 +1026,7 @@ static int method_get_product_uuid(sd_bus_message *m, void *userdata, sd_bus_err
 static int method_describe(sd_bus_message *m, void *userdata, sd_bus_error *error) {
         _cleanup_free_ char *hn = NULL, *dhn = NULL, *in = NULL, *text = NULL, *vendor = NULL, *model = NULL;
         _cleanup_(sd_bus_message_unrefp) sd_bus_message *reply = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         sd_id128_t product_uuid = SD_ID128_NULL;
         const char *chassis = NULL;
         Context *c = userdata;
@@ -1086,31 +1086,31 @@ static int method_describe(sd_bus_message *m, void *userdata, sd_bus_error *erro
         if (privileged) /* The product UUID is only available to privileged clients */
                 id128_get_product(&product_uuid);
 
-        r = json_build(&v, JSON_BUILD_OBJECT(
-                                       JSON_BUILD_PAIR("Hostname", JSON_BUILD_STRING(hn)),
-                                       JSON_BUILD_PAIR("StaticHostname", JSON_BUILD_STRING(c->data[PROP_STATIC_HOSTNAME])),
-                                       JSON_BUILD_PAIR("PrettyHostname", JSON_BUILD_STRING(c->data[PROP_PRETTY_HOSTNAME])),
-                                       JSON_BUILD_PAIR("DefaultHostname", JSON_BUILD_STRING(dhn)),
-                                       JSON_BUILD_PAIR("HostnameSource", JSON_BUILD_STRING(hostname_source_to_string(c->hostname_source))),
-                                       JSON_BUILD_PAIR("IconName", JSON_BUILD_STRING(in ?: c->data[PROP_ICON_NAME])),
-                                       JSON_BUILD_PAIR("Chassis", JSON_BUILD_STRING(chassis ?: c->data[PROP_CHASSIS])),
-                                       JSON_BUILD_PAIR("Deployment", JSON_BUILD_STRING(c->data[PROP_DEPLOYMENT])),
-                                       JSON_BUILD_PAIR("Location", JSON_BUILD_STRING(c->data[PROP_LOCATION])),
-                                       JSON_BUILD_PAIR("KernelName", JSON_BUILD_STRING(u.sysname)),
-                                       JSON_BUILD_PAIR("KernelRelease", JSON_BUILD_STRING(u.release)),
-                                       JSON_BUILD_PAIR("KernelVersion", JSON_BUILD_STRING(u.version)),
-                                       JSON_BUILD_PAIR("OperatingSystemPrettyName", JSON_BUILD_STRING(c->data[PROP_OS_PRETTY_NAME])),
-                                       JSON_BUILD_PAIR("OperatingSystemCPEName", JSON_BUILD_STRING(c->data[PROP_OS_CPE_NAME])),
-                                       JSON_BUILD_PAIR("OperatingSystemHomeURL", JSON_BUILD_STRING(c->data[PROP_OS_HOME_URL])),
-                                       JSON_BUILD_PAIR("HardwareVendor", JSON_BUILD_STRING(vendor)),
-                                       JSON_BUILD_PAIR("HardwareModel", JSON_BUILD_STRING(model)),
-                                       JSON_BUILD_PAIR_CONDITION(!sd_id128_is_null(product_uuid), "ProductUUID", JSON_BUILD_ID128(product_uuid)),
-                                       JSON_BUILD_PAIR_CONDITION(sd_id128_is_null(product_uuid), "ProductUUID", JSON_BUILD_NULL)));
+        r = sd_json_build(&v, SD_JSON_BUILD_OBJECT(
+                                       SD_JSON_BUILD_PAIR("Hostname", SD_JSON_BUILD_STRING(hn)),
+                                       SD_JSON_BUILD_PAIR("StaticHostname", SD_JSON_BUILD_STRING(c->data[PROP_STATIC_HOSTNAME])),
+                                       SD_JSON_BUILD_PAIR("PrettyHostname", SD_JSON_BUILD_STRING(c->data[PROP_PRETTY_HOSTNAME])),
+                                       SD_JSON_BUILD_PAIR("DefaultHostname", SD_JSON_BUILD_STRING(dhn)),
+                                       SD_JSON_BUILD_PAIR("HostnameSource", SD_JSON_BUILD_STRING(hostname_source_to_string(c->hostname_source))),
+                                       SD_JSON_BUILD_PAIR("IconName", SD_JSON_BUILD_STRING(in ?: c->data[PROP_ICON_NAME])),
+                                       SD_JSON_BUILD_PAIR("Chassis", SD_JSON_BUILD_STRING(chassis ?: c->data[PROP_CHASSIS])),
+                                       SD_JSON_BUILD_PAIR("Deployment", SD_JSON_BUILD_STRING(c->data[PROP_DEPLOYMENT])),
+                                       SD_JSON_BUILD_PAIR("Location", SD_JSON_BUILD_STRING(c->data[PROP_LOCATION])),
+                                       SD_JSON_BUILD_PAIR("KernelName", SD_JSON_BUILD_STRING(u.sysname)),
+                                       SD_JSON_BUILD_PAIR("KernelRelease", SD_JSON_BUILD_STRING(u.release)),
+                                       SD_JSON_BUILD_PAIR("KernelVersion", SD_JSON_BUILD_STRING(u.version)),
+                                       SD_JSON_BUILD_PAIR("OperatingSystemPrettyName", SD_JSON_BUILD_STRING(c->data[PROP_OS_PRETTY_NAME])),
+                                       SD_JSON_BUILD_PAIR("OperatingSystemCPEName", SD_JSON_BUILD_STRING(c->data[PROP_OS_CPE_NAME])),
+                                       SD_JSON_BUILD_PAIR("OperatingSystemHomeURL", SD_JSON_BUILD_STRING(c->data[PROP_OS_HOME_URL])),
+                                       SD_JSON_BUILD_PAIR("HardwareVendor", SD_JSON_BUILD_STRING(vendor)),
+                                       SD_JSON_BUILD_PAIR("HardwareModel", SD_JSON_BUILD_STRING(model)),
+                                       SD_JSON_BUILD_PAIR_CONDITION(!sd_id128_is_null(product_uuid), "ProductUUID", SD_JSON_BUILD_ID128(product_uuid)),
+                                       SD_JSON_BUILD_PAIR_CONDITION(sd_id128_is_null(product_uuid), "ProductUUID", SD_JSON_BUILD_NULL)));
 
         if (r < 0)
                 return log_error_errno(r, "Failed to build JSON data: %m");
 
-        r = json_variant_format(v, 0, &text);
+        r = sd_json_variant_format(v, 0, &text);
         if (r < 0)
                 return log_error_errno(r, "Failed to format JSON data: %m");
 

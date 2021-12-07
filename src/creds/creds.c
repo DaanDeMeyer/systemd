@@ -35,7 +35,7 @@ typedef enum TranscodeMode {
         _TRANSCODE_INVALID = -EINVAL,
 } TranscodeMode;
 
-static JsonFormatFlags arg_json_format_flags = JSON_FORMAT_OFF;
+static sd_json_format_flags_t arg_json_format_flags = SD_JSON_FORMAT_OFF;
 static PagerFlags arg_pager_flags = 0;
 static bool arg_legend = true;
 static bool arg_system = false;
@@ -171,7 +171,7 @@ static int verb_list(int argc, char **argv, void *userdata) {
                         return table_log_add_error(r);
         }
 
-        if ((arg_json_format_flags & JSON_FORMAT_OFF) && table_get_rows(t) <= 1) {
+        if ((arg_json_format_flags & SD_JSON_FORMAT_OFF) && table_get_rows(t) <= 1) {
                 log_info("No credentials");
                 return 0;
         }
@@ -268,10 +268,10 @@ static int write_blob(FILE *f, const void *data, size_t size) {
         int r;
 
         if (arg_transcode == TRANSCODE_OFF &&
-            arg_json_format_flags != JSON_FORMAT_OFF) {
+            arg_json_format_flags != SD_JSON_FORMAT_OFF) {
 
                 _cleanup_(erase_and_freep) char *suffixed = NULL;
-                _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
 
                 if (memchr(data, 0, size))
                         return log_error_errno(SYNTHETIC_ERRNO(EBADMSG), "Credential data contains embedded NUL, can't parse as JSON.");
@@ -280,11 +280,11 @@ static int write_blob(FILE *f, const void *data, size_t size) {
                 if (!suffixed)
                         return log_oom();
 
-                r = json_parse(suffixed, JSON_PARSE_SENSITIVE, &v, NULL, NULL);
+                r = sd_json_parse(suffixed, SD_JSON_PARSE_SENSITIVE, &v, NULL, NULL);
                 if (r < 0)
                         return log_error_errno(r, "Failed to parse JSON: %m");
 
-                json_variant_dump(v, arg_json_format_flags, f, NULL);
+                sd_json_variant_dump(v, arg_json_format_flags, f, NULL);
                 return 0;
         }
 

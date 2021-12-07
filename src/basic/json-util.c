@@ -6,7 +6,7 @@
 #include "json-util.h"
 
 int json_log_internal(
-                JsonVariant *variant,
+                sd_json_variant *variant,
                 int level,
                 int error,
                 const char *file,
@@ -29,7 +29,7 @@ int json_log_internal(
         va_end(ap);
 
         if (variant) {
-                r = json_variant_get_source(variant, &source, &source_line, &source_column);
+                r = sd_json_variant_get_source(variant, &source, &source_line, &source_column);
                 if (r < 0)
                         return r;
         } else {

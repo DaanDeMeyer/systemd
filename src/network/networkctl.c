@@ -77,9 +77,9 @@ static bool arg_all = false;
 static bool arg_stats = false;
 static bool arg_full = false;
 static unsigned arg_lines = 10;
-static JsonFormatFlags arg_json_format_flags = JSON_FORMAT_OFF;
+static sd_json_format_flags_t arg_json_format_flags = SD_JSON_FORMAT_OFF;
 
-static int get_description(JsonVariant **ret) {
+static int get_description(sd_json_variant **ret) {
         _cleanup_(sd_bus_error_free) sd_bus_error error = SD_BUS_ERROR_NULL;
         _cleanup_(sd_bus_message_unrefp) sd_bus_message *reply = NULL;
         _cleanup_(sd_bus_flush_close_unrefp) sd_bus *bus = NULL;
@@ -98,7 +98,7 @@ static int get_description(JsonVariant **ret) {
         if (r < 0)
                 return bus_log_parse_error(r);
 
-        r = json_parse(text, 0, ret, NULL, NULL);
+        r = sd_json_parse(text, 0, ret, NULL, NULL);
         if (r < 0)
                 return log_error_errno(r, "Failed to parse JSON: %m");
 
@@ -106,21 +106,21 @@ static int get_description(JsonVariant **ret) {
 }
 
 static int dump_manager_description(void) {
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         int r;
 
         r = get_description(&v);
         if (r < 0)
                 return r;
 
-        json_variant_dump(v, arg_json_format_flags, NULL, NULL);
+        sd_json_variant_dump(v, arg_json_format_flags, NULL, NULL);
         return 0;
 }
 
 static int dump_link_description(char **patterns) {
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         _cleanup_free_ bool *matched_patterns = NULL;
-        JsonVariant *i;
+        sd_json_variant *i;
         size_t c = 0;
         int r;
 
@@ -132,23 +132,23 @@ static int dump_link_description(char **patterns) {
         if (!matched_patterns)
                 return log_oom();
 
-        JSON_VARIANT_ARRAY_FOREACH(i, json_variant_by_key(v, "Interfaces")) {
+        SD_JSON_VARIANT_ARRAY_FOREACH(i, sd_json_variant_by_key(v, "Interfaces")) {
                 char ifindex_str[DECIMAL_STR_MAX(int64_t)];
                 const char *name;
                 int64_t index;
                 size_t pos;
 
-                name = json_variant_string(json_variant_by_key(i, "Name"));
-                index = json_variant_integer(json_variant_by_key(i, "Index"));
+                name = sd_json_variant_string(sd_json_variant_by_key(i, "Name"));
+                index = sd_json_variant_integer(sd_json_variant_by_key(i, "Index"));
                 xsprintf(ifindex_str, "%ji", index);
 
                 if (!strv_fnmatch_full(patterns, ifindex_str, 0, &pos) &&
                     !strv_fnmatch_full(patterns, name, 0, &pos)) {
                         bool match = false;
-                        JsonVariant *a;
+                        sd_json_variant *a;
 
-                        JSON_VARIANT_ARRAY_FOREACH(a, json_variant_by_key(i, "AlternativeNames"))
-                                if (strv_fnmatch_full(patterns, json_variant_string(a), 0, &pos)) {
+                        SD_JSON_VARIANT_ARRAY_FOREACH(a, sd_json_variant_by_key(i, "AlternativeNames"))
+                                if (strv_fnmatch_full(patterns, sd_json_variant_string(a), 0, &pos)) {
                                         match = true;
                                         break;
                                 }
@@ -158,7 +158,7 @@ static int dump_link_description(char **patterns) {
                 }
 
                 matched_patterns[pos] = true;
-                json_variant_dump(i, arg_json_format_flags, NULL, NULL);
+                sd_json_variant_dump(i, arg_json_format_flags, NULL, NULL);
                 c++;
         }
 
@@ -796,7 +796,7 @@ static int list_links(int argc, char *argv[], void *userdata) {
         TableCell *cell;
         int c, r;
 
-        if (arg_json_format_flags != JSON_FORMAT_OFF) {
+        if (arg_json_format_flags != SD_JSON_FORMAT_OFF) {
                 if (arg_all || argc <= 1)
                         return dump_manager_description();
                 else
@@ -2389,7 +2389,7 @@ static int link_status(int argc, char *argv[], void *userdata) {
         _cleanup_(link_info_array_freep) LinkInfo *links = NULL;
         int r, c;
 
-        if (arg_json_format_flags != JSON_FORMAT_OFF) {
+        if (arg_json_format_flags != SD_JSON_FORMAT_OFF) {
                 if (arg_all || argc <= 1)
                         return dump_manager_description();
                 else

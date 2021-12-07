@@ -38,315 +38,315 @@
   limiting in most cases even.)
 */
 
-typedef struct JsonVariant JsonVariant;
+typedef struct sd_json_variant sd_json_variant;
 
-typedef enum JsonVariantType {
-        JSON_VARIANT_STRING,
-        JSON_VARIANT_INTEGER,
-        JSON_VARIANT_UNSIGNED,
-        JSON_VARIANT_REAL,
-        JSON_VARIANT_NUMBER, /* This a pseudo-type: we can never create variants of this type, but we use it as wildcard check for the above three types */
-        JSON_VARIANT_BOOLEAN,
-        JSON_VARIANT_ARRAY,
-        JSON_VARIANT_OBJECT,
-        JSON_VARIANT_NULL,
-        _JSON_VARIANT_TYPE_MAX,
-        _JSON_VARIANT_TYPE_INVALID = -EINVAL,
+typedef enum sd_json_variant_type_t {
+        SD_JSON_VARIANT_STRING,
+        SD_JSON_VARIANT_INTEGER,
+        SD_JSON_VARIANT_UNSIGNED,
+        SD_JSON_VARIANT_REAL,
+        SD_JSON_VARIANT_NUMBER, /* This a pseudo-type: we can never create variants of this type, but we use it as wildcard check for the above three types */
+        SD_JSON_VARIANT_BOOLEAN,
+        SD_JSON_VARIANT_ARRAY,
+        SD_JSON_VARIANT_OBJECT,
+        SD_JSON_VARIANT_NULL,
+        _SD_JSON_VARIANT_TYPE_MAX,
+        _SD_JSON_VARIANT_TYPE_INVALID = -EINVAL,
 
         _SD_ENUM_FORCE_S64(JSON_VARIANT),
-} JsonVariantType;
+} sd_json_variant_type_t;
 
-int json_variant_new_stringn(JsonVariant **ret, const char *s, size_t n);
-int json_variant_new_string(JsonVariant **ret, const char *s);
-int json_variant_new_base64(JsonVariant **ret, const void *p, size_t n);
-int json_variant_new_hex(JsonVariant **ret, const void *p, size_t n);
-int json_variant_new_integer(JsonVariant **ret, int64_t i);
-int json_variant_new_unsigned(JsonVariant **ret, uint64_t u);
-int json_variant_new_real(JsonVariant **ret, double d);
-int json_variant_new_boolean(JsonVariant **ret, bool b);
-int json_variant_new_array(JsonVariant **ret, JsonVariant **array, size_t n);
-int json_variant_new_array_bytes(JsonVariant **ret, const void *p, size_t n);
-int json_variant_new_array_strv(JsonVariant **ret, char **l);
-int json_variant_new_object(JsonVariant **ret, JsonVariant **array, size_t n);
-int json_variant_new_null(JsonVariant **ret);
-int json_variant_new_id128(JsonVariant **ret, sd_id128_t id);
+int sd_json_variant_new_stringn(sd_json_variant **ret, const char *s, size_t n);
+int sd_json_variant_new_string(sd_json_variant **ret, const char *s);
+int sd_json_variant_new_base64(sd_json_variant **ret, const void *p, size_t n);
+int sd_json_variant_new_hex(sd_json_variant **ret, const void *p, size_t n);
+int sd_json_variant_new_integer(sd_json_variant **ret, int64_t i);
+int sd_json_variant_new_unsigned(sd_json_variant **ret, uint64_t u);
+int sd_json_variant_new_real(sd_json_variant **ret, double d);
+int sd_json_variant_new_boolean(sd_json_variant **ret, bool b);
+int sd_json_variant_new_array(sd_json_variant **ret, sd_json_variant **array, size_t n);
+int sd_json_variant_new_array_bytes(sd_json_variant **ret, const void *p, size_t n);
+int sd_json_variant_new_array_strv(sd_json_variant **ret, char **l);
+int sd_json_variant_new_object(sd_json_variant **ret, sd_json_variant **array, size_t n);
+int sd_json_variant_new_null(sd_json_variant **ret);
+int sd_json_variant_new_id128(sd_json_variant **ret, sd_id128_t id);
 
-JsonVariant *json_variant_ref(JsonVariant *v);
-JsonVariant *json_variant_unref(JsonVariant *v);
-void json_variant_unref_many(JsonVariant **array, size_t n);
+sd_json_variant *sd_json_variant_ref(sd_json_variant *v);
+sd_json_variant *sd_json_variant_unref(sd_json_variant *v);
+void sd_json_variant_unref_many(sd_json_variant **array, size_t n);
 
-_SD_DEFINE_POINTER_CLEANUP_FUNC(JsonVariant, json_variant_unref);
+_SD_DEFINE_POINTER_CLEANUP_FUNC(sd_json_variant, sd_json_variant_unref);
 
-const char *json_variant_string(JsonVariant *v);
-int64_t json_variant_integer(JsonVariant *v);
-uint64_t json_variant_unsigned(JsonVariant *v);
-double json_variant_real(JsonVariant *v);
-bool json_variant_boolean(JsonVariant *v);
+const char *sd_json_variant_string(sd_json_variant *v);
+int64_t sd_json_variant_integer(sd_json_variant *v);
+uint64_t sd_json_variant_unsigned(sd_json_variant *v);
+double sd_json_variant_real(sd_json_variant *v);
+bool sd_json_variant_boolean(sd_json_variant *v);
 
-JsonVariantType json_variant_type(JsonVariant *v);
-bool json_variant_has_type(JsonVariant *v, JsonVariantType type);
+sd_json_variant_type_t sd_json_variant_type(sd_json_variant *v);
+bool sd_json_variant_has_type(sd_json_variant *v, sd_json_variant_type_t type);
 
-bool json_variant_is_string(JsonVariant *v);
-bool json_variant_is_integer(JsonVariant *v);
-bool json_variant_is_unsigned(JsonVariant *v);
-bool json_variant_is_real(JsonVariant *v);
-bool json_variant_is_number(JsonVariant *v);
-bool json_variant_is_boolean(JsonVariant *v);
-bool json_variant_is_array(JsonVariant *v);
-bool json_variant_is_object(JsonVariant *v);
-bool json_variant_is_null(JsonVariant *v);
+bool sd_json_variant_is_string(sd_json_variant *v);
+bool sd_json_variant_is_integer(sd_json_variant *v);
+bool sd_json_variant_is_unsigned(sd_json_variant *v);
+bool sd_json_variant_is_real(sd_json_variant *v);
+bool sd_json_variant_is_number(sd_json_variant *v);
+bool sd_json_variant_is_boolean(sd_json_variant *v);
+bool sd_json_variant_is_array(sd_json_variant *v);
+bool sd_json_variant_is_object(sd_json_variant *v);
+bool sd_json_variant_is_null(sd_json_variant *v);
 
-bool json_variant_is_negative(JsonVariant *v);
-bool json_variant_is_blank_object(JsonVariant *v);
-bool json_variant_is_blank_array(JsonVariant *v);
-bool json_variant_is_normalized(JsonVariant *v);
-bool json_variant_is_sorted(JsonVariant *v);
+bool sd_json_variant_is_negative(sd_json_variant *v);
+bool sd_json_variant_is_blank_object(sd_json_variant *v);
+bool sd_json_variant_is_blank_array(sd_json_variant *v);
+bool sd_json_variant_is_normalized(sd_json_variant *v);
+bool sd_json_variant_is_sorted(sd_json_variant *v);
 
-size_t json_variant_elements(JsonVariant *v);
-JsonVariant *json_variant_by_index(JsonVariant *v, size_t index);
-JsonVariant *json_variant_by_key(JsonVariant *v, const char *key);
-JsonVariant *json_variant_by_key_full(JsonVariant *v, const char *key, JsonVariant **ret_key);
+size_t sd_json_variant_elements(sd_json_variant *v);
+sd_json_variant *sd_json_variant_by_index(sd_json_variant *v, size_t index);
+sd_json_variant *sd_json_variant_by_key(sd_json_variant *v, const char *key);
+sd_json_variant *sd_json_variant_by_key_full(sd_json_variant *v, const char *key, sd_json_variant **ret_key);
 
-bool json_variant_equal(JsonVariant *a, JsonVariant *b);
+bool sd_json_variant_equal(sd_json_variant *a, sd_json_variant *b);
 
-void json_variant_sensitive(JsonVariant *v);
-bool json_variant_is_sensitive(JsonVariant *v);
+void sd_json_variant_sensitive(sd_json_variant *v);
+bool sd_json_variant_is_sensitive(sd_json_variant *v);
 
-struct json_variant_foreach_state {
-        JsonVariant *variant;
+struct sd_json_variant_foreach_state {
+        sd_json_variant *variant;
         size_t idx;
 };
 
-#define _JSON_VARIANT_ARRAY_FOREACH(i, v, state)                        \
-        for (struct json_variant_foreach_state state = { (v), 0 };      \
-             json_variant_is_array(state.variant) &&                    \
-                     state.idx < json_variant_elements(state.variant) && \
-                     ({ i = json_variant_by_index(state.variant, state.idx); \
+#define _SD_JSON_VARIANT_ARRAY_FOREACH(i, v, state)                        \
+        for (struct sd_json_variant_foreach_state state = { (v), 0 };      \
+             sd_json_variant_is_array(state.variant) &&                    \
+                     state.idx < sd_json_variant_elements(state.variant) && \
+                     ({ i = sd_json_variant_by_index(state.variant, state.idx); \
                              true; });                                  \
              state.idx++)
-#define JSON_VARIANT_ARRAY_FOREACH(i, v)                                \
-        _JSON_VARIANT_ARRAY_FOREACH(i, v, UNIQ_T(state, UNIQ))
+#define SD_JSON_VARIANT_ARRAY_FOREACH(i, v)                                \
+        _SD_JSON_VARIANT_ARRAY_FOREACH(i, v, UNIQ_T(state, UNIQ))
 
-#define _JSON_VARIANT_OBJECT_FOREACH(k, e, v, state)                    \
-        for (struct json_variant_foreach_state state = { (v), 0 };      \
-             json_variant_is_object(state.variant) &&                   \
-                     state.idx < json_variant_elements(state.variant) && \
-                     ({ k = json_variant_string(json_variant_by_index(state.variant, state.idx)); \
-                             e = json_variant_by_index(state.variant, state.idx + 1); \
+#define _SD_JSON_VARIANT_OBJECT_FOREACH(k, e, v, state)                    \
+        for (struct sd_json_variant_foreach_state state = { (v), 0 };      \
+             sd_json_variant_is_object(state.variant) &&                   \
+                     state.idx < sd_json_variant_elements(state.variant) && \
+                     ({ k = sd_json_variant_string(sd_json_variant_by_index(state.variant, state.idx)); \
+                             e = sd_json_variant_by_index(state.variant, state.idx + 1); \
                              true; });                                  \
              state.idx += 2)
-#define JSON_VARIANT_OBJECT_FOREACH(k, e, v)                            \
-        _JSON_VARIANT_OBJECT_FOREACH(k, e, v, UNIQ_T(state, UNIQ))
+#define SD_JSON_VARIANT_OBJECT_FOREACH(k, e, v)                            \
+        _SD_JSON_VARIANT_OBJECT_FOREACH(k, e, v, UNIQ_T(state, UNIQ))
 
-int json_variant_get_source(JsonVariant *v, const char **ret_source, unsigned *ret_line, unsigned *ret_column);
+int sd_json_variant_get_source(sd_json_variant *v, const char **ret_source, unsigned *ret_line, unsigned *ret_column);
 
-typedef enum JsonFormatFlags {
-        JSON_FORMAT_NEWLINE     = 1 << 0, /* suffix with newline */
-        JSON_FORMAT_PRETTY      = 1 << 1, /* add internal whitespace to appeal to human readers */
-        JSON_FORMAT_PRETTY_AUTO = 1 << 2, /* same, but only if connected to a tty (and JSON_FORMAT_NEWLINE otherwise) */
-        JSON_FORMAT_COLOR       = 1 << 3, /* insert ANSI color sequences */
-        JSON_FORMAT_COLOR_AUTO  = 1 << 4, /* insert ANSI color sequences if colors_enabled() says so */
-        JSON_FORMAT_SOURCE      = 1 << 5, /* prefix with source filename/line/column */
-        JSON_FORMAT_SSE         = 1 << 6, /* prefix/suffix with W3C server-sent events */
-        JSON_FORMAT_SEQ         = 1 << 7, /* prefix/suffix with RFC 7464 application/json-seq */
-        JSON_FORMAT_FLUSH       = 1 << 8, /* call fflush() after dumping JSON */
-        JSON_FORMAT_OFF         = 1 << 9, /* make json_variant_format() fail with -ENOEXEC */
+typedef enum sd_json_format_flags_t {
+        SD_JSON_FORMAT_NEWLINE     = 1 << 0, /* suffix with newline */
+        SD_JSON_FORMAT_PRETTY      = 1 << 1, /* add internal whitespace to appeal to human readers */
+        SD_JSON_FORMAT_PRETTY_AUTO = 1 << 2, /* same, but only if connected to a tty (and SD_JSON_FORMAT_NEWLINE otherwise) */
+        SD_JSON_FORMAT_COLOR       = 1 << 3, /* insert ANSI color sequences */
+        SD_JSON_FORMAT_COLOR_AUTO  = 1 << 4, /* insert ANSI color sequences if colors_enabled() says so */
+        SD_JSON_FORMAT_SOURCE      = 1 << 5, /* prefix with source filename/line/column */
+        SD_JSON_FORMAT_SSE         = 1 << 6, /* prefix/suffix with W3C server-sent events */
+        SD_JSON_FORMAT_SEQ         = 1 << 7, /* prefix/suffix with RFC 7464 application/json-seq */
+        SD_JSON_FORMAT_FLUSH       = 1 << 8, /* call fflush() after dumping JSON */
+        SD_JSON_FORMAT_OFF         = 1 << 9, /* make sd_json_variant_format() fail with -ENOEXEC */
 
         _SD_ENUM_FORCE_U64(JSON_FORMAT),
-} JsonFormatFlags;
+} sd_json_format_flags_t;
 
-int json_variant_format(JsonVariant *v, JsonFormatFlags flags, char **ret);
-void json_variant_dump(JsonVariant *v, JsonFormatFlags flags, FILE *f, const char *prefix);
+int sd_json_variant_format(sd_json_variant *v, sd_json_format_flags_t flags, char **ret);
+void sd_json_variant_dump(sd_json_variant *v, sd_json_format_flags_t flags, FILE *f, const char *prefix);
 
-int json_variant_filter(JsonVariant **v, char **to_remove);
+int sd_json_variant_filter(sd_json_variant **v, char **to_remove);
 
-int json_variant_set_field(JsonVariant **v, const char *field, JsonVariant *value);
-int json_variant_set_field_string(JsonVariant **v, const char *field, const char *value);
-int json_variant_set_field_integer(JsonVariant **v, const char *field, int64_t value);
-int json_variant_set_field_unsigned(JsonVariant **v, const char *field, uint64_t value);
-int json_variant_set_field_boolean(JsonVariant **v, const char *field, bool b);
-int json_variant_set_field_strv(JsonVariant **v, const char *field, char **l);
+int sd_json_variant_set_field(sd_json_variant **v, const char *field, sd_json_variant *value);
+int sd_json_variant_set_field_string(sd_json_variant **v, const char *field, const char *value);
+int sd_json_variant_set_field_integer(sd_json_variant **v, const char *field, int64_t value);
+int sd_json_variant_set_field_unsigned(sd_json_variant **v, const char *field, uint64_t value);
+int sd_json_variant_set_field_boolean(sd_json_variant **v, const char *field, bool b);
+int sd_json_variant_set_field_strv(sd_json_variant **v, const char *field, char **l);
 
-int json_variant_append_array(JsonVariant **v, JsonVariant *element);
+int sd_json_variant_append_array(sd_json_variant **v, sd_json_variant *element);
 
-int json_variant_merge(JsonVariant **v, JsonVariant *m);
+int sd_json_variant_merge(sd_json_variant **v, sd_json_variant *m);
 
-int json_variant_strv(JsonVariant *v, char ***ret);
+int sd_json_variant_strv(sd_json_variant *v, char ***ret);
 
-int json_variant_sort(JsonVariant **v);
-int json_variant_normalize(JsonVariant **v);
+int sd_json_variant_sort(sd_json_variant **v);
+int sd_json_variant_normalize(sd_json_variant **v);
 
-typedef enum JsonParseFlags {
-        JSON_PARSE_SENSITIVE = 1 << 0, /* mark variant as "sensitive", i.e. something containing secret key material or such */
+typedef enum sd_json_parse_flags_t {
+        SD_JSON_PARSE_SENSITIVE = 1 << 0, /* mark variant as "sensitive", i.e. something containing secret key material or such */
 
         _SD_ENUM_FORCE_U64(JSON_PARSE)
-} JsonParseFlags;
+} sd_json_parse_flags_t;
 
-int json_parse(const char *string, JsonParseFlags flags, JsonVariant **ret, unsigned *ret_line, unsigned *ret_column);
-int json_parse_continue(const char **p, JsonParseFlags flags, JsonVariant **ret, unsigned *ret_line, unsigned *ret_column);
-int json_parse_file_at(FILE *f, int dir_fd, const char *path, JsonParseFlags flags, JsonVariant **ret, unsigned *ret_line, unsigned *ret_column);
-int json_parse_file(FILE *f, const char *path, JsonParseFlags flags, JsonVariant **ret, unsigned *ret_line, unsigned *ret_column);
+int sd_json_parse(const char *string, sd_json_parse_flags_t flags, sd_json_variant **ret, unsigned *ret_line, unsigned *ret_column);
+int sd_json_parse_continue(const char **p, sd_json_parse_flags_t flags, sd_json_variant **ret, unsigned *ret_line, unsigned *ret_column);
+int sd_json_parse_file_at(FILE *f, int dir_fd, const char *path, sd_json_parse_flags_t flags, sd_json_variant **ret, unsigned *ret_line, unsigned *ret_column);
+int sd_json_parse_file(FILE *f, const char *path, sd_json_parse_flags_t flags, sd_json_variant **ret, unsigned *ret_line, unsigned *ret_column);
 
 enum {
-        _JSON_BUILD_STRING,
-        _JSON_BUILD_INTEGER,
-        _JSON_BUILD_UNSIGNED,
-        _JSON_BUILD_REAL,
-        _JSON_BUILD_BOOLEAN,
-        _JSON_BUILD_ARRAY_BEGIN,
-        _JSON_BUILD_ARRAY_END,
-        _JSON_BUILD_OBJECT_BEGIN,
-        _JSON_BUILD_OBJECT_END,
-        _JSON_BUILD_PAIR,
-        _JSON_BUILD_PAIR_CONDITION,
-        _JSON_BUILD_NULL,
-        _JSON_BUILD_VARIANT,
-        _JSON_BUILD_VARIANT_ARRAY,
-        _JSON_BUILD_LITERAL,
-        _JSON_BUILD_STRV,
-        _JSON_BUILD_BASE64,
-        _JSON_BUILD_HEX,
-        _JSON_BUILD_ID128,
-        _JSON_BUILD_BYTE_ARRAY,
-        _JSON_BUILD_HW_ADDR,
-        _JSON_BUILD_PAIR_UNSIGNED_NON_ZERO,
-        _JSON_BUILD_PAIR_FINITE_USEC,
-        _JSON_BUILD_PAIR_STRING_NON_EMPTY,
-        _JSON_BUILD_PAIR_STRV_NON_EMPTY,
-        _JSON_BUILD_PAIR_VARIANT_NON_NULL,
-        _JSON_BUILD_PAIR_VARIANT_ARRAY_NON_EMPTY,
-        _JSON_BUILD_PAIR_IN4_ADDR_NON_NULL,
-        _JSON_BUILD_PAIR_IN6_ADDR_NON_NULL,
-        _JSON_BUILD_PAIR_IN_ADDR_NON_NULL,
-        _JSON_BUILD_PAIR_ETHER_ADDR_NON_NULL,
-        _JSON_BUILD_PAIR_HW_ADDR_NON_NULL,
-        _JSON_BUILD_MAX,
+        _SD_JSON_BUILD_STRING,
+        _SD_JSON_BUILD_INTEGER,
+        _SD_JSON_BUILD_UNSIGNED,
+        _SD_JSON_BUILD_REAL,
+        _SD_JSON_BUILD_BOOLEAN,
+        _SD_JSON_BUILD_ARRAY_BEGIN,
+        _SD_JSON_BUILD_ARRAY_END,
+        _SD_JSON_BUILD_OBJECT_BEGIN,
+        _SD_JSON_BUILD_OBJECT_END,
+        _SD_JSON_BUILD_PAIR,
+        _SD_JSON_BUILD_PAIR_CONDITION,
+        _SD_JSON_BUILD_NULL,
+        _SD_JSON_BUILD_VARIANT,
+        _SD_JSON_BUILD_VARIANT_ARRAY,
+        _SD_JSON_BUILD_LITERAL,
+        _SD_JSON_BUILD_STRV,
+        _SD_JSON_BUILD_BASE64,
+        _SD_JSON_BUILD_HEX,
+        _SD_JSON_BUILD_ID128,
+        _SD_JSON_BUILD_BYTE_ARRAY,
+        _SD_JSON_BUILD_HW_ADDR,
+        _SD_JSON_BUILD_PAIR_UNSIGNED_NON_ZERO,
+        _SD_JSON_BUILD_PAIR_FINITE_USEC,
+        _SD_JSON_BUILD_PAIR_STRING_NON_EMPTY,
+        _SD_JSON_BUILD_PAIR_STRV_NON_EMPTY,
+        _SD_JSON_BUILD_PAIR_VARIANT_NON_NULL,
+        _SD_JSON_BUILD_PAIR_VARIANT_ARRAY_NON_EMPTY,
+        _SD_JSON_BUILD_PAIR_IN4_ADDR_NON_NULL,
+        _SD_JSON_BUILD_PAIR_IN6_ADDR_NON_NULL,
+        _SD_JSON_BUILD_PAIR_IN_ADDR_NON_NULL,
+        _SD_JSON_BUILD_PAIR_ETHER_ADDR_NON_NULL,
+        _SD_JSON_BUILD_PAIR_HW_ADDR_NON_NULL,
+        _SD_JSON_BUILD_MAX,
 };
 
-#define JSON_BUILD_STRING(s) _JSON_BUILD_STRING, (const char*) { s }
-#define JSON_BUILD_INTEGER(i) _JSON_BUILD_INTEGER, (int64_t) { i }
-#define JSON_BUILD_UNSIGNED(u) _JSON_BUILD_UNSIGNED, (uint64_t) { u }
-#define JSON_BUILD_REAL(d) _JSON_BUILD_REAL, (double) { d }
-#define JSON_BUILD_BOOLEAN(b) _JSON_BUILD_BOOLEAN, (bool) { b }
-#define JSON_BUILD_ARRAY(...) _JSON_BUILD_ARRAY_BEGIN, __VA_ARGS__, _JSON_BUILD_ARRAY_END
-#define JSON_BUILD_EMPTY_ARRAY _JSON_BUILD_ARRAY_BEGIN, _JSON_BUILD_ARRAY_END
-#define JSON_BUILD_OBJECT(...) _JSON_BUILD_OBJECT_BEGIN, __VA_ARGS__, _JSON_BUILD_OBJECT_END
-#define JSON_BUILD_EMPTY_OBJECT _JSON_BUILD_OBJECT_BEGIN, _JSON_BUILD_OBJECT_END
-#define JSON_BUILD_PAIR(n, ...) _JSON_BUILD_PAIR, (const char*) { n }, __VA_ARGS__
-#define JSON_BUILD_PAIR_CONDITION(c, n, ...) _JSON_BUILD_PAIR_CONDITION, (bool) { c }, (const char*) { n }, __VA_ARGS__
-#define JSON_BUILD_NULL _JSON_BUILD_NULL
-#define JSON_BUILD_VARIANT(v) _JSON_BUILD_VARIANT, (JsonVariant*) { v }
-#define JSON_BUILD_VARIANT_ARRAY(v, n) _JSON_BUILD_VARIANT_ARRAY, (JsonVariant **) { v }, (size_t) { n }
-#define JSON_BUILD_LITERAL(l) _JSON_BUILD_LITERAL, (const char*) { l }
-#define JSON_BUILD_STRV(l) _JSON_BUILD_STRV, (char**) { l }
-#define JSON_BUILD_BASE64(p, n) _JSON_BUILD_BASE64, (const void*) { p }, (size_t) { n }
-#define JSON_BUILD_HEX(p, n) _JSON_BUILD_HEX, (const void*) { p }, (size_t) { n }
-#define JSON_BUILD_ID128(id) _JSON_BUILD_ID128, (const sd_id128_t*) { &(id) }
-#define JSON_BUILD_BYTE_ARRAY(v, n) _JSON_BUILD_BYTE_ARRAY, (const void*) { v }, (size_t) { n }
-#define JSON_BUILD_CONST_STRING(s) _JSON_BUILD_VARIANT, JSON_VARIANT_STRING_CONST(s)
-#define JSON_BUILD_IN4_ADDR(v) JSON_BUILD_BYTE_ARRAY((const struct in_addr*) { v }, sizeof(struct in_addr))
-#define JSON_BUILD_IN6_ADDR(v) JSON_BUILD_BYTE_ARRAY((const struct in6_addr*) { v }, sizeof(struct in6_addr))
-#define JSON_BUILD_IN_ADDR(v, f) JSON_BUILD_BYTE_ARRAY(((const union in_addr_union*) { v })->bytes, FAMILY_ADDRESS_SIZE_SAFE(f))
-#define JSON_BUILD_ETHER_ADDR(v) JSON_BUILD_BYTE_ARRAY(((const struct ether_addr*) { v })->ether_addr_octet, sizeof(struct ether_addr))
-#define JSON_BUILD_HW_ADDR(v) _JSON_BUILD_HW_ADDR, (const struct hw_addr_data*) { v }
+#define SD_JSON_BUILD_STRING(s) _SD_JSON_BUILD_STRING, (const char*) { s }
+#define SD_JSON_BUILD_INTEGER(i) _SD_JSON_BUILD_INTEGER, (int64_t) { i }
+#define SD_JSON_BUILD_UNSIGNED(u) _SD_JSON_BUILD_UNSIGNED, (uint64_t) { u }
+#define SD_JSON_BUILD_REAL(d) _SD_JSON_BUILD_REAL, (double) { d }
+#define SD_JSON_BUILD_BOOLEAN(b) _SD_JSON_BUILD_BOOLEAN, (bool) { b }
+#define SD_JSON_BUILD_ARRAY(...) _SD_JSON_BUILD_ARRAY_BEGIN, __VA_ARGS__, _SD_JSON_BUILD_ARRAY_END
+#define SD_JSON_BUILD_EMPTY_ARRAY _SD_JSON_BUILD_ARRAY_BEGIN, _SD_JSON_BUILD_ARRAY_END
+#define SD_JSON_BUILD_OBJECT(...) _SD_JSON_BUILD_OBJECT_BEGIN, __VA_ARGS__, _SD_JSON_BUILD_OBJECT_END
+#define SD_JSON_BUILD_EMPTY_OBJECT _SD_JSON_BUILD_OBJECT_BEGIN, _SD_JSON_BUILD_OBJECT_END
+#define SD_JSON_BUILD_PAIR(n, ...) _SD_JSON_BUILD_PAIR, (const char*) { n }, __VA_ARGS__
+#define SD_JSON_BUILD_PAIR_CONDITION(c, n, ...) _SD_JSON_BUILD_PAIR_CONDITION, (bool) { c }, (const char*) { n }, __VA_ARGS__
+#define SD_JSON_BUILD_NULL _SD_JSON_BUILD_NULL
+#define SD_JSON_BUILD_VARIANT(v) _SD_JSON_BUILD_VARIANT, (sd_json_variant*) { v }
+#define SD_JSON_BUILD_VARIANT_ARRAY(v, n) _SD_JSON_BUILD_VARIANT_ARRAY, (sd_json_variant **) { v }, (size_t) { n }
+#define SD_JSON_BUILD_LITERAL(l) _SD_JSON_BUILD_LITERAL, (const char*) { l }
+#define SD_JSON_BUILD_STRV(l) _SD_JSON_BUILD_STRV, (char**) { l }
+#define SD_JSON_BUILD_BASE64(p, n) _SD_JSON_BUILD_BASE64, (const void*) { p }, (size_t) { n }
+#define SD_JSON_BUILD_HEX(p, n) _SD_JSON_BUILD_HEX, (const void*) { p }, (size_t) { n }
+#define SD_JSON_BUILD_ID128(id) _SD_JSON_BUILD_ID128, (const sd_id128_t*) { &(id) }
+#define SD_JSON_BUILD_BYTE_ARRAY(v, n) _SD_JSON_BUILD_BYTE_ARRAY, (const void*) { v }, (size_t) { n }
+#define SD_JSON_BUILD_CONST_STRING(s) _SD_JSON_BUILD_VARIANT, SD_JSON_VARIANT_STRING_CONST(s)
+#define SD_JSON_BUILD_IN4_ADDR(v) SD_JSON_BUILD_BYTE_ARRAY((const struct in_addr*) { v }, sizeof(struct in_addr))
+#define SD_JSON_BUILD_IN6_ADDR(v) SD_JSON_BUILD_BYTE_ARRAY((const struct in6_addr*) { v }, sizeof(struct in6_addr))
+#define SD_JSON_BUILD_IN_ADDR(v, f) SD_JSON_BUILD_BYTE_ARRAY(((const union in_addr_union*) { v })->bytes, FAMILY_ADDRESS_SIZE_SAFE(f))
+#define SD_JSON_BUILD_ETHER_ADDR(v) SD_JSON_BUILD_BYTE_ARRAY(((const struct ether_addr*) { v })->ether_addr_octet, sizeof(struct ether_addr))
+#define SD_JSON_BUILD_HW_ADDR(v) _SD_JSON_BUILD_HW_ADDR, (const struct hw_addr_data*) { v }
 
-#define JSON_BUILD_PAIR_STRING(name, s) JSON_BUILD_PAIR(name, JSON_BUILD_STRING(s))
-#define JSON_BUILD_PAIR_INTEGER(name, i) JSON_BUILD_PAIR(name, JSON_BUILD_INTEGER(i))
-#define JSON_BUILD_PAIR_UNSIGNED(name, u) JSON_BUILD_PAIR(name, JSON_BUILD_UNSIGNED(u))
-#define JSON_BUILD_PAIR_REAL(name, d) JSON_BUILD_PAIR(name, JSON_BUILD_REAL(d))
-#define JSON_BUILD_PAIR_BOOLEAN(name, b) JSON_BUILD_PAIR(name, JSON_BUILD_BOOLEAN(b))
-#define JSON_BUILD_PAIR_ARRAY(name, ...) JSON_BUILD_PAIR(name, JSON_BUILD_ARRAY(__VA_ARGS__))
-#define JSON_BUILD_PAIR_EMPTY_ARRAY(name) JSON_BUILD_PAIR(name, JSON_BUILD_EMPTY_ARRAY)
-#define JSON_BUILD_PAIR_OBJECT(name, ...) JSON_BUILD_PAIR(name, JSON_BUILD_OBJECT(__VA_ARGS__))
-#define JSON_BUILD_PAIR_EMPTY_OBJECT(name) JSON_BUILD_PAIR(name, JSON_BUILD_EMPTY_OBJECT)
-#define JSON_BUILD_PAIR_NULL(name) JSON_BUILD_PAIR(name, JSON_BUILD_NULL)
-#define JSON_BUILD_PAIR_VARIANT(name, v) JSON_BUILD_PAIR(name, JSON_BUILD_VARIANT(v))
-#define JSON_BUILD_PAIR_VARIANT_ARRAY(name, v, n) JSON_BUILD_PAIR(name, JSON_BUILD_VARIANT_ARRAY(v, n))
-#define JSON_BUILD_PAIR_LITERAL(name, l) JSON_BUILD_PAIR(name, JSON_BUILD_LITERAL(l))
-#define JSON_BUILD_PAIR_STRV(name, l) JSON_BUILD_PAIR(name, JSON_BUILD_STRV(l))
-#define JSON_BUILD_PAIR_BASE64(name, p, n) JSON_BUILD_PAIR(name, JSON_BUILD_BASE64(p, n))
-#define JSON_BUILD_PAIR_HEX(name, p, n) JSON_BUILD_PAIR(name, JSON_BUILD_HEX(p, n))
-#define JSON_BUILD_PAIR_ID128(name, id) JSON_BUILD_PAIR(name, JSON_BUILD_ID128(id))
-#define JSON_BUILD_PAIR_BYTE_ARRAY(name, v, n) JSON_BUILD_PAIR(name, JSON_BUILD_BYTE_ARRAY(v, n))
-#define JSON_BUILD_PAIR_IN4_ADDR(name, v) JSON_BUILD_PAIR(name, JSON_BUILD_IN4_ADDR(v))
-#define JSON_BUILD_PAIR_IN6_ADDR(name, v) JSON_BUILD_PAIR(name, JSON_BUILD_IN6_ADDR(v))
-#define JSON_BUILD_PAIR_IN_ADDR(name, v, f) JSON_BUILD_PAIR(name, JSON_BUILD_IN_ADDR(v, f))
-#define JSON_BUILD_PAIR_ETHER_ADDR(name, v) JSON_BUILD_PAIR(name, JSON_BUILD_ETHER_ADDR(v))
-#define JSON_BUILD_PAIR_HW_ADDR(name, v) JSON_BUILD_PAIR(name, JSON_BUILD_HW_ADDR(v))
+#define SD_JSON_BUILD_PAIR_STRING(name, s) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_STRING(s))
+#define SD_JSON_BUILD_PAIR_INTEGER(name, i) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_INTEGER(i))
+#define SD_JSON_BUILD_PAIR_UNSIGNED(name, u) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_UNSIGNED(u))
+#define SD_JSON_BUILD_PAIR_REAL(name, d) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_REAL(d))
+#define SD_JSON_BUILD_PAIR_BOOLEAN(name, b) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_BOOLEAN(b))
+#define SD_JSON_BUILD_PAIR_ARRAY(name, ...) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_ARRAY(__VA_ARGS__))
+#define SD_JSON_BUILD_PAIR_EMPTY_ARRAY(name) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_EMPTY_ARRAY)
+#define SD_JSON_BUILD_PAIR_OBJECT(name, ...) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_OBJECT(__VA_ARGS__))
+#define SD_JSON_BUILD_PAIR_EMPTY_OBJECT(name) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_EMPTY_OBJECT)
+#define SD_JSON_BUILD_PAIR_NULL(name) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_NULL)
+#define SD_JSON_BUILD_PAIR_VARIANT(name, v) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_VARIANT(v))
+#define SD_JSON_BUILD_PAIR_VARIANT_ARRAY(name, v, n) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_VARIANT_ARRAY(v, n))
+#define SD_JSON_BUILD_PAIR_LITERAL(name, l) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_LITERAL(l))
+#define SD_JSON_BUILD_PAIR_STRV(name, l) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_STRV(l))
+#define SD_JSON_BUILD_PAIR_BASE64(name, p, n) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_BASE64(p, n))
+#define SD_JSON_BUILD_PAIR_HEX(name, p, n) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_HEX(p, n))
+#define SD_JSON_BUILD_PAIR_ID128(name, id) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_ID128(id))
+#define SD_JSON_BUILD_PAIR_BYTE_ARRAY(name, v, n) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_BYTE_ARRAY(v, n))
+#define SD_JSON_BUILD_PAIR_IN4_ADDR(name, v) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_IN4_ADDR(v))
+#define SD_JSON_BUILD_PAIR_IN6_ADDR(name, v) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_IN6_ADDR(v))
+#define SD_JSON_BUILD_PAIR_IN_ADDR(name, v, f) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_IN_ADDR(v, f))
+#define SD_JSON_BUILD_PAIR_ETHER_ADDR(name, v) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_ETHER_ADDR(v))
+#define SD_JSON_BUILD_PAIR_HW_ADDR(name, v) SD_JSON_BUILD_PAIR(name, SD_JSON_BUILD_HW_ADDR(v))
 
-#define JSON_BUILD_PAIR_UNSIGNED_NON_ZERO(name, u) _JSON_BUILD_PAIR_UNSIGNED_NON_ZERO, (const char*) { name }, (uint64_t) { u }
-#define JSON_BUILD_PAIR_FINITE_USEC(name, u) _JSON_BUILD_PAIR_FINITE_USEC, (const char*) { name }, (usec_t) { u }
-#define JSON_BUILD_PAIR_STRING_NON_EMPTY(name, s) _JSON_BUILD_PAIR_STRING_NON_EMPTY, (const char*) { name }, (const char*) { s }
-#define JSON_BUILD_PAIR_STRV_NON_EMPTY(name, l) _JSON_BUILD_PAIR_STRV_NON_EMPTY, (const char*) { name }, (char**) { l }
-#define JSON_BUILD_PAIR_VARIANT_NON_NULL(name, v) _JSON_BUILD_PAIR_VARIANT_NON_NULL, (const char*) { name }, (JsonVariant*) { v }
-#define JSON_BUILD_PAIR_IN4_ADDR_NON_NULL(name, v) _JSON_BUILD_PAIR_IN4_ADDR_NON_NULL, (const char*) { name }, (const struct in_addr*) { v }
-#define JSON_BUILD_PAIR_IN6_ADDR_NON_NULL(name, v) _JSON_BUILD_PAIR_IN6_ADDR_NON_NULL, (const char*) { name }, (const struct in6_addr*) { v }
-#define JSON_BUILD_PAIR_IN_ADDR_NON_NULL(name, v, f) _JSON_BUILD_PAIR_IN_ADDR_NON_NULL, (const char*) { name }, (const union in_addr_union*) { v }, (int) { f }
-#define JSON_BUILD_PAIR_ETHER_ADDR_NON_NULL(name, v) _JSON_BUILD_PAIR_ETHER_ADDR_NON_NULL, (const char*) { name }, (const struct ether_addr*) { v }
-#define JSON_BUILD_PAIR_HW_ADDR_NON_NULL(name, v) _JSON_BUILD_PAIR_HW_ADDR_NON_NULL, (const char*) { name }, (const struct hw_addr_data*) { v }
+#define SD_JSON_BUILD_PAIR_UNSIGNED_NON_ZERO(name, u) _SD_JSON_BUILD_PAIR_UNSIGNED_NON_ZERO, (const char*) { name }, (uint64_t) { u }
+#define SD_JSON_BUILD_PAIR_FINITE_USEC(name, u) _SD_JSON_BUILD_PAIR_FINITE_USEC, (const char*) { name }, (usec_t) { u }
+#define SD_JSON_BUILD_PAIR_STRING_NON_EMPTY(name, s) _SD_JSON_BUILD_PAIR_STRING_NON_EMPTY, (const char*) { name }, (const char*) { s }
+#define SD_JSON_BUILD_PAIR_STRV_NON_EMPTY(name, l) _SD_JSON_BUILD_PAIR_STRV_NON_EMPTY, (const char*) { name }, (char**) { l }
+#define SD_JSON_BUILD_PAIR_VARIANT_NON_NULL(name, v) _SD_JSON_BUILD_PAIR_VARIANT_NON_NULL, (const char*) { name }, (sd_json_variant*) { v }
+#define SD_JSON_BUILD_PAIR_IN4_ADDR_NON_NULL(name, v) _SD_JSON_BUILD_PAIR_IN4_ADDR_NON_NULL, (const char*) { name }, (const struct in_addr*) { v }
+#define SD_JSON_BUILD_PAIR_IN6_ADDR_NON_NULL(name, v) _SD_JSON_BUILD_PAIR_IN6_ADDR_NON_NULL, (const char*) { name }, (const struct in6_addr*) { v }
+#define SD_JSON_BUILD_PAIR_IN_ADDR_NON_NULL(name, v, f) _SD_JSON_BUILD_PAIR_IN_ADDR_NON_NULL, (const char*) { name }, (const union in_addr_union*) { v }, (int) { f }
+#define SD_JSON_BUILD_PAIR_ETHER_ADDR_NON_NULL(name, v) _SD_JSON_BUILD_PAIR_ETHER_ADDR_NON_NULL, (const char*) { name }, (const struct ether_addr*) { v }
+#define SD_JSON_BUILD_PAIR_HW_ADDR_NON_NULL(name, v) _SD_JSON_BUILD_PAIR_HW_ADDR_NON_NULL, (const char*) { name }, (const struct hw_addr_data*) { v }
 
-int json_build(JsonVariant **ret, ...);
-int json_buildv(JsonVariant **ret, va_list ap);
+int sd_json_build(sd_json_variant **ret, ...);
+int sd_json_buildv(sd_json_variant **ret, va_list ap);
 
 /* A bitmask of flags used by the dispatch logic. Note that this is a combined bit mask, that is generated from the bit
- * mask originally passed into json_dispatch(), the individual bitmask associated with the static JsonDispatch callout
+ * mask originally passed into sd_json_dispatch(), the individual bitmask associated with the static sd_json_dispatch_t callout
  * entry, as well the bitmask specified for json_log() calls */
-typedef enum JsonDispatchFlags {
-        /* The following three may be set in JsonDispatch's .flags field or the json_dispatch() flags parameter  */
-        JSON_PERMISSIVE = 1 << 0, /* Shall parsing errors be considered fatal for this property? */
-        JSON_MANDATORY  = 1 << 1, /* Should existence of this property be mandatory? */
-        JSON_LOG        = 1 << 2, /* Should the parser log about errors? */
-        JSON_SAFE       = 1 << 3, /* Don't accept "unsafe" strings in json_dispatch_string() + json_dispatch_string() */
-        JSON_RELAX      = 1 << 4, /* Use relaxed user name checking in json_dispatch_user_group_name */
+typedef enum sd_json_dispatch_flags_t {
+        /* The following three may be set in sd_json_dispatch_t's .flags field or the sd_json_dispatch() flags parameter  */
+        SD_JSON_PERMISSIVE = 1 << 0, /* Shall parsing errors be considered fatal for this property? */
+        SD_JSON_MANDATORY  = 1 << 1, /* Should existence of this property be mandatory? */
+        SD_JSON_LOG        = 1 << 2, /* Should the parser log about errors? */
+        SD_JSON_SAFE       = 1 << 3, /* Don't accept "unsafe" strings in sd_json_dispatch_string() + json_dispatch_string() */
+        SD_JSON_RELAX      = 1 << 4, /* Use relaxed user name checking in json_dispatch_user_group_name */
 
         /* The following two may be passed into log_json() in addition to the three above */
-        JSON_DEBUG      = 1 << 4, /* Indicates that this log message is a debug message */
-        JSON_WARNING    = 1 << 5, /* Indicates that this log message is a warning message */
+        SD_JSON_DEBUG      = 1 << 4, /* Indicates that this log message is a debug message */
+        SD_JSON_WARNING    = 1 << 5, /* Indicates that this log message is a warning message */
 
         _SD_ENUM_FORCE_U64(JSON_DISPATCH),
-} JsonDispatchFlags;
+} sd_json_dispatch_flags_t;
 
-typedef int (*JsonDispatchCallback)(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
+typedef int (*sd_json_dispatch_callback_t)(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
 
-typedef struct JsonDispatch {
+typedef struct sd_json_dispatch_t {
         const char *name;
-        JsonVariantType type;
-        JsonDispatchCallback callback;
+        sd_json_variant_type_t type;
+        sd_json_dispatch_callback_t callback;
         size_t offset;
-        JsonDispatchFlags flags;
-} JsonDispatch;
+        sd_json_dispatch_flags_t flags;
+} sd_json_dispatch_t;
 
-int json_dispatch(JsonVariant *v, const JsonDispatch table[], JsonDispatchCallback bad, JsonDispatchFlags flags, void *userdata);
+int sd_json_dispatch(sd_json_variant *v, const sd_json_dispatch_t table[], sd_json_dispatch_callback_t bad, sd_json_dispatch_flags_t flags, void *userdata);
 
-int json_dispatch_string(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_const_string(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_strv(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_boolean(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_tristate(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_variant(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_int64(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_uint64(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_uint32(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_int32(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_uid_gid(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_user_group_name(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_id128(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
-int json_dispatch_unsupported(const char *name, JsonVariant *variant, JsonDispatchFlags flags, void *userdata);
+int sd_json_dispatch_string(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_const_string(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_strv(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_boolean(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_tristate(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_variant(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_int64(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_uint64(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_uint32(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_int32(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_uid_gid(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_user_group_name(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_id128(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
+int sd_json_dispatch_unsupported(const char *name, sd_json_variant *variant, sd_json_dispatch_flags_t flags, void *userdata);
 
-#define json_dispatch_uint json_dispatch_uint32
-#define json_dispatch_int json_dispatch_int32
+#define sd_json_dispatch_uint sd_json_dispatch_uint32
+#define sd_json_dispatch_int sd_json_dispatch_int32
 
-#define JSON_VARIANT_STRING_CONST(x) _JSON_VARIANT_STRING_CONST(UNIQ, (x))
+#define SD_JSON_VARIANT_STRING_CONST(x) _SD_JSON_VARIANT_STRING_CONST(UNIQ, (x))
 
-#define _JSON_VARIANT_STRING_CONST(xq, x)                               \
+#define _SD_JSON_VARIANT_STRING_CONST(xq, x)                               \
         ({                                                              \
                 _align_(2) static const char UNIQ_T(json_string_const, xq)[] = (x); \
                 assert((((uintptr_t) UNIQ_T(json_string_const, xq)) & 1) == 0); \
-                (JsonVariant*) ((uintptr_t) UNIQ_T(json_string_const, xq) + 1); \
+                (sd_json_variant*) ((uintptr_t) UNIQ_T(json_string_const, xq) + 1); \
         })
 
-int json_variant_unbase64(JsonVariant *v, void **ret, size_t *ret_size);
-int json_variant_unhex(JsonVariant *v, void **ret, size_t *ret_size);
+int sd_json_variant_unbase64(sd_json_variant *v, void **ret, size_t *ret_size);
+int sd_json_variant_unhex(sd_json_variant *v, void **ret, size_t *ret_size);
 
-const char *json_variant_type_to_string(JsonVariantType t);
-JsonVariantType json_variant_type_from_string(const char *s);
+const char *sd_json_variant_type_to_string(sd_json_variant_type_t t);
+sd_json_variant_type_t sd_json_variant_type_from_string(const char *s);

@@ -104,7 +104,7 @@ static bool arg_randomize = false;
 static int arg_pretty = -1;
 static uint64_t arg_size = UINT64_MAX;
 static bool arg_size_auto = false;
-static JsonFormatFlags arg_json_format_flags = JSON_FORMAT_OFF;
+static sd_json_format_flags_t arg_json_format_flags = SD_JSON_FORMAT_OFF;
 static PagerFlags arg_pager_flags = 0;
 static bool arg_legend = true;
 static void *arg_key = NULL;
@@ -1954,7 +1954,7 @@ static int context_dump_partitions(Context *context, const char *node) {
         Partition *p;
         int r;
 
-        if ((arg_json_format_flags & JSON_FORMAT_OFF) && context->n_partitions == 0) {
+        if ((arg_json_format_flags & SD_JSON_FORMAT_OFF) && context->n_partitions == 0) {
                 log_info("Empty partition table.");
                 return 0;
         }
@@ -1964,7 +1964,7 @@ static int context_dump_partitions(Context *context, const char *node) {
                 return log_oom();
 
         if (!DEBUG_LOGGING) {
-                if (arg_json_format_flags & JSON_FORMAT_OFF)
+                if (arg_json_format_flags & SD_JSON_FORMAT_OFF)
                         (void) table_set_display(t, (size_t) 0, (size_t) 1, (size_t) 2, (size_t) 3, (size_t) 4,
                                                     (size_t) 8, (size_t) 11);
                 else
@@ -2028,7 +2028,7 @@ static int context_dump_partitions(Context *context, const char *node) {
                         return table_log_add_error(r);
         }
 
-        if ((arg_json_format_flags & JSON_FORMAT_OFF) && (sum_padding > 0 || sum_size > 0)) {
+        if ((arg_json_format_flags & SD_JSON_FORMAT_OFF) && (sum_padding > 0 || sum_size > 0)) {
                 const char *a, *b;
 
                 a = strjoina(special_glyph(SPECIAL_GLYPH_SIGMA), " = ", FORMAT_BYTES(sum_size));
@@ -2601,7 +2601,7 @@ static int partition_encrypt(
         if (IN_SET(p->encrypt, ENCRYPT_TPM2, ENCRYPT_KEY_FILE_TPM2)) {
 #if HAVE_TPM2
                 _cleanup_(erase_and_freep) char *base64_encoded = NULL;
-                _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
                 _cleanup_(erase_and_freep) void *secret = NULL;
                 _cleanup_free_ void *blob = NULL, *hash = NULL;
                 size_t secret_size, blob_size, hash_size;
@@ -3431,13 +3431,13 @@ static int context_write_partition_table(
 
         if (arg_pretty > 0 ||
             (arg_pretty < 0 && isatty(STDOUT_FILENO) > 0) ||
-            !FLAGS_SET(arg_json_format_flags, JSON_FORMAT_OFF)) {
+            !FLAGS_SET(arg_json_format_flags, SD_JSON_FORMAT_OFF)) {
 
                 (void) context_dump_partitions(context, node);
 
                 putc('\n', stdout);
 
-                if (arg_json_format_flags & JSON_FORMAT_OFF)
+                if (arg_json_format_flags & SD_JSON_FORMAT_OFF)
                         (void) context_dump_partition_bar(context, node);
                 putc('\n', stdout);
                 fflush(stdout);

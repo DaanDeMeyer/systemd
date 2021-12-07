@@ -74,9 +74,9 @@ void cryptsetup_enable_logging(struct crypt_device *cd);
 
 int cryptsetup_set_minimal_pbkdf(struct crypt_device *cd);
 
-int cryptsetup_get_token_as_json(struct crypt_device *cd, int idx, const char *verify_type, JsonVariant **ret);
-int cryptsetup_get_keyslot_from_token(JsonVariant *v);
-int cryptsetup_add_token_json(struct crypt_device *cd, JsonVariant *v);
+int cryptsetup_get_token_as_json(struct crypt_device *cd, int idx, const char *verify_type, sd_json_variant **ret);
+int cryptsetup_get_keyslot_from_token(sd_json_variant *v);
+int cryptsetup_add_token_json(struct crypt_device *cd, sd_json_variant *v);
 
 #else
 

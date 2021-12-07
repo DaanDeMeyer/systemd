@@ -50,7 +50,7 @@ typedef enum OutputFlags {
         OUTPUT_CGROUP_ID      = 1 << 10,
 } OutputFlags;
 
-JsonFormatFlags output_mode_to_json_format_flags(OutputMode m);
+sd_json_format_flags_t output_mode_to_json_format_flags(OutputMode m);
 
 const char* output_mode_to_string(OutputMode m) _const_;
 OutputMode output_mode_from_string(const char *s) _pure_;

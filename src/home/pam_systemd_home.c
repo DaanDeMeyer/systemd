@@ -98,7 +98,7 @@ static int acquire_user_record(
                 UserRecord **ret_record) {
 
         _cleanup_(sd_bus_message_unrefp) sd_bus_message *reply = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         _cleanup_(user_record_unrefp) UserRecord *ur = NULL;
         _cleanup_(sd_bus_unrefp) sd_bus *bus = NULL;
         _cleanup_free_ char *homed_field = NULL;
@@ -208,7 +208,7 @@ static int acquire_user_record(
                 TAKE_PTR(json_copy);
         }
 
-        r = json_parse(json, JSON_PARSE_SENSITIVE, &v, NULL, NULL);
+        r = sd_json_parse(json, SD_JSON_PARSE_SENSITIVE, &v, NULL, NULL);
         if (r < 0) {
                 pam_syslog(handle, LOG_ERR, "Failed to parse JSON user record: %s", strerror_safe(r));
                 return PAM_SERVICE_ERR;

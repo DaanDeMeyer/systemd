@@ -138,17 +138,17 @@ static int userdb_iterator_block_nss_systemd(UserDBIterator *iterator) {
 }
 
 struct user_group_data {
-        JsonVariant *record;
+        sd_json_variant *record;
         bool incomplete;
 };
 
 static void user_group_data_release(struct user_group_data *d) {
-        json_variant_unref(d->record);
+        sd_json_variant_unref(d->record);
 }
 
 static int userdb_on_query_reply(
                 Varlink *link,
-                JsonVariant *parameters,
+                sd_json_variant *parameters,
                 const char *error_id,
                 VarlinkReplyFlags flags,
                 void *userdata) {
@@ -182,16 +182,16 @@ static int userdb_on_query_reply(
         case LOOKUP_USER: {
                 _cleanup_(user_group_data_release) struct user_group_data user_data = {};
 
-                static const JsonDispatch dispatch_table[] = {
-                        { "record",     _JSON_VARIANT_TYPE_INVALID, json_dispatch_variant, offsetof(struct user_group_data, record),     0 },
-                        { "incomplete", JSON_VARIANT_BOOLEAN,       json_dispatch_boolean, offsetof(struct user_group_data, incomplete), 0 },
+                static const sd_json_dispatch_t dispatch_table[] = {
+                        { "record",     _SD_JSON_VARIANT_TYPE_INVALID, sd_json_dispatch_variant, offsetof(struct user_group_data, record),     0 },
+                        { "incomplete", SD_JSON_VARIANT_BOOLEAN,       sd_json_dispatch_boolean, offsetof(struct user_group_data, incomplete), 0 },
                         {}
                 };
                 _cleanup_(user_record_unrefp) UserRecord *hr = NULL;
 
                 assert_se(!iterator->found_user);
 
-                r = json_dispatch(parameters, dispatch_table, NULL, 0, &user_data);
+                r = sd_json_dispatch(parameters, dispatch_table, NULL, 0, &user_data);
                 if (r < 0)
                         goto finish;
 
@@ -239,16 +239,16 @@ static int userdb_on_query_reply(
         case LOOKUP_GROUP: {
                 _cleanup_(user_group_data_release) struct user_group_data group_data = {};
 
-                static const JsonDispatch dispatch_table[] = {
-                        { "record",     _JSON_VARIANT_TYPE_INVALID, json_dispatch_variant, offsetof(struct user_group_data, record),     0 },
-                        { "incomplete", JSON_VARIANT_BOOLEAN,       json_dispatch_boolean, offsetof(struct user_group_data, incomplete), 0 },
+                static const sd_json_dispatch_t dispatch_table[] = {
+                        { "record",     _SD_JSON_VARIANT_TYPE_INVALID, sd_json_dispatch_variant, offsetof(struct user_group_data, record),     0 },
+                        { "incomplete", SD_JSON_VARIANT_BOOLEAN,       sd_json_dispatch_boolean, offsetof(struct user_group_data, incomplete), 0 },
                         {}
                 };
                 _cleanup_(group_record_unrefp) GroupRecord *g = NULL;
 
                 assert_se(!iterator->found_group);
 
-                r = json_dispatch(parameters, dispatch_table, NULL, 0, &group_data);
+                r = sd_json_dispatch(parameters, dispatch_table, NULL, 0, &group_data);
                 if (r < 0)
                         goto finish;
 
@@ -295,16 +295,16 @@ static int userdb_on_query_reply(
                         const char *group_name;
                 } membership_data = {};
 
-                static const JsonDispatch dispatch_table[] = {
-                        { "userName",  JSON_VARIANT_STRING, json_dispatch_const_string, offsetof(struct membership_data, user_name),  JSON_SAFE },
-                        { "groupName", JSON_VARIANT_STRING, json_dispatch_const_string, offsetof(struct membership_data, group_name), JSON_SAFE },
+                static const sd_json_dispatch_t dispatch_table[] = {
+                        { "userName",  SD_JSON_VARIANT_STRING, sd_json_dispatch_const_string, offsetof(struct membership_data, user_name),  SD_JSON_SAFE },
+                        { "groupName", SD_JSON_VARIANT_STRING, sd_json_dispatch_const_string, offsetof(struct membership_data, group_name), SD_JSON_SAFE },
                         {}
                 };
 
                 assert(!iterator->found_user_name);
                 assert(!iterator->found_group_name);
 
-                r = json_dispatch(parameters, dispatch_table, NULL, 0, &membership_data);
+                r = sd_json_dispatch(parameters, dispatch_table, NULL, 0, &membership_data);
                 if (r < 0)
                         goto finish;
 
@@ -352,7 +352,7 @@ static int userdb_connect(
                 const char *path,
                 const char *method,
                 bool more,
-                JsonVariant *query) {
+                sd_json_variant *query) {
 
         _cleanup_(varlink_unrefp) Varlink *vl = NULL;
         int r;
@@ -400,7 +400,7 @@ static int userdb_start_query(
                 UserDBIterator *iterator,
                 const char *method,
                 bool more,
-                JsonVariant *query,
+                sd_json_variant *query,
                 UserDBFlags flags) {
 
         _cleanup_(strv_freep) char **except = NULL, **only = NULL;
@@ -438,9 +438,9 @@ static int userdb_start_query(
         if ((flags & (USERDB_AVOID_MULTIPLEXER|USERDB_EXCLUDE_DYNAMIC_USER|USERDB_EXCLUDE_NSS|USERDB_EXCLUDE_DROPIN|USERDB_DONT_SYNTHESIZE)) == 0 &&
             !strv_contains(except, "io.systemd.Multiplexer") &&
             (!only || strv_contains(only, "io.systemd.Multiplexer"))) {
-                _cleanup_(json_variant_unrefp) JsonVariant *patched_query = json_variant_ref(query);
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *patched_query = sd_json_variant_ref(query);
 
-                r = json_variant_set_field_string(&patched_query, "service", "io.systemd.Multiplexer");
+                r = sd_json_variant_set_field_string(&patched_query, "service", "io.systemd.Multiplexer");
                 if (r < 0)
                         return log_debug_errno(r, "Unable to set service JSON field: %m");
 
@@ -461,7 +461,7 @@ static int userdb_start_query(
         }
 
         FOREACH_DIRENT(de, d, return -errno) {
-                _cleanup_(json_variant_unrefp) JsonVariant *patched_query = NULL;
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *patched_query = NULL;
                 _cleanup_free_ char *p = NULL;
                 bool is_nss, is_dropin;
 
@@ -495,8 +495,8 @@ static int userdb_start_query(
                 if (!p)
                         return -ENOMEM;
 
-                patched_query = json_variant_ref(query);
-                r = json_variant_set_field_string(&patched_query, "service", de->d_name);
+                patched_query = sd_json_variant_ref(query);
+                r = sd_json_variant_set_field_string(&patched_query, "service", de->d_name);
                 if (r < 0)
                         return log_debug_errno(r, "Unable to set service JSON field: %m");
 
@@ -600,34 +600,34 @@ static int userdb_process(
 static int synthetic_root_user_build(UserRecord **ret) {
         return user_record_build(
                         ret,
-                        JSON_BUILD_OBJECT(JSON_BUILD_PAIR("userName", JSON_BUILD_CONST_STRING("root")),
-                                          JSON_BUILD_PAIR("uid", JSON_BUILD_UNSIGNED(0)),
-                                          JSON_BUILD_PAIR("gid", JSON_BUILD_UNSIGNED(0)),
-                                          JSON_BUILD_PAIR("homeDirectory", JSON_BUILD_CONST_STRING("/root")),
-                                          JSON_BUILD_PAIR("disposition", JSON_BUILD_CONST_STRING("intrinsic"))));
+                        SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("userName", SD_JSON_BUILD_CONST_STRING("root")),
+                                          SD_JSON_BUILD_PAIR("uid", SD_JSON_BUILD_UNSIGNED(0)),
+                                          SD_JSON_BUILD_PAIR("gid", SD_JSON_BUILD_UNSIGNED(0)),
+                                          SD_JSON_BUILD_PAIR("homeDirectory", SD_JSON_BUILD_CONST_STRING("/root")),
+                                          SD_JSON_BUILD_PAIR("disposition", SD_JSON_BUILD_CONST_STRING("intrinsic"))));
 }
 
 static int synthetic_nobody_user_build(UserRecord **ret) {
         return user_record_build(
                         ret,
-                        JSON_BUILD_OBJECT(JSON_BUILD_PAIR("userName", JSON_BUILD_CONST_STRING(NOBODY_USER_NAME)),
-                                          JSON_BUILD_PAIR("uid", JSON_BUILD_UNSIGNED(UID_NOBODY)),
-                                          JSON_BUILD_PAIR("gid", JSON_BUILD_UNSIGNED(GID_NOBODY)),
-                                          JSON_BUILD_PAIR("shell", JSON_BUILD_CONST_STRING(NOLOGIN)),
-                                          JSON_BUILD_PAIR("locked", JSON_BUILD_BOOLEAN(true)),
-                                          JSON_BUILD_PAIR("disposition", JSON_BUILD_CONST_STRING("intrinsic"))));
+                        SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("userName", SD_JSON_BUILD_CONST_STRING(NOBODY_USER_NAME)),
+                                          SD_JSON_BUILD_PAIR("uid", SD_JSON_BUILD_UNSIGNED(UID_NOBODY)),
+                                          SD_JSON_BUILD_PAIR("gid", SD_JSON_BUILD_UNSIGNED(GID_NOBODY)),
+                                          SD_JSON_BUILD_PAIR("shell", SD_JSON_BUILD_CONST_STRING(NOLOGIN)),
+                                          SD_JSON_BUILD_PAIR("locked", SD_JSON_BUILD_BOOLEAN(true)),
+                                          SD_JSON_BUILD_PAIR("disposition", SD_JSON_BUILD_CONST_STRING("intrinsic"))));
 }
 
 int userdb_by_name(const char *name, UserDBFlags flags, UserRecord **ret) {
         _cleanup_(userdb_iterator_freep) UserDBIterator *iterator = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *query = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *query = NULL;
         int r;
 
         if (!valid_user_group_name(name, VALID_USER_RELAX))
                 return -EINVAL;
 
-        r = json_build(&query, JSON_BUILD_OBJECT(
-                                       JSON_BUILD_PAIR("userName", JSON_BUILD_STRING(name))));
+        r = sd_json_build(&query, SD_JSON_BUILD_OBJECT(
+                                       SD_JSON_BUILD_PAIR("userName", SD_JSON_BUILD_STRING(name))));
         if (r < 0)
                 return r;
 
@@ -673,14 +673,14 @@ int userdb_by_name(const char *name, UserDBFlags flags, UserRecord **ret) {
 
 int userdb_by_uid(uid_t uid, UserDBFlags flags, UserRecord **ret) {
         _cleanup_(userdb_iterator_freep) UserDBIterator *iterator = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *query = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *query = NULL;
         int r;
 
         if (!uid_is_valid(uid))
                 return -EINVAL;
 
-        r = json_build(&query, JSON_BUILD_OBJECT(
-                                       JSON_BUILD_PAIR("uid", JSON_BUILD_UNSIGNED(uid))));
+        r = sd_json_build(&query, SD_JSON_BUILD_OBJECT(
+                                       SD_JSON_BUILD_PAIR("uid", SD_JSON_BUILD_UNSIGNED(uid))));
         if (r < 0)
                 return r;
 
@@ -878,29 +878,29 @@ int userdb_iterator_get(UserDBIterator *iterator, UserRecord **ret) {
 static int synthetic_root_group_build(GroupRecord **ret) {
         return group_record_build(
                         ret,
-                        JSON_BUILD_OBJECT(JSON_BUILD_PAIR("groupName", JSON_BUILD_CONST_STRING("root")),
-                                          JSON_BUILD_PAIR("gid", JSON_BUILD_UNSIGNED(0)),
-                                          JSON_BUILD_PAIR("disposition", JSON_BUILD_CONST_STRING("intrinsic"))));
+                        SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("groupName", SD_JSON_BUILD_CONST_STRING("root")),
+                                          SD_JSON_BUILD_PAIR("gid", SD_JSON_BUILD_UNSIGNED(0)),
+                                          SD_JSON_BUILD_PAIR("disposition", SD_JSON_BUILD_CONST_STRING("intrinsic"))));
 }
 
 static int synthetic_nobody_group_build(GroupRecord **ret) {
         return group_record_build(
                         ret,
-                        JSON_BUILD_OBJECT(JSON_BUILD_PAIR("groupName", JSON_BUILD_CONST_STRING(NOBODY_GROUP_NAME)),
-                                          JSON_BUILD_PAIR("gid", JSON_BUILD_UNSIGNED(GID_NOBODY)),
-                                          JSON_BUILD_PAIR("disposition", JSON_BUILD_CONST_STRING("intrinsic"))));
+                        SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("groupName", SD_JSON_BUILD_CONST_STRING(NOBODY_GROUP_NAME)),
+                                          SD_JSON_BUILD_PAIR("gid", SD_JSON_BUILD_UNSIGNED(GID_NOBODY)),
+                                          SD_JSON_BUILD_PAIR("disposition", SD_JSON_BUILD_CONST_STRING("intrinsic"))));
 }
 
 int groupdb_by_name(const char *name, UserDBFlags flags, GroupRecord **ret) {
         _cleanup_(userdb_iterator_freep) UserDBIterator *iterator = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *query = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *query = NULL;
         int r;
 
         if (!valid_user_group_name(name, VALID_USER_RELAX))
                 return -EINVAL;
 
-        r = json_build(&query, JSON_BUILD_OBJECT(
-                                       JSON_BUILD_PAIR("groupName", JSON_BUILD_STRING(name))));
+        r = sd_json_build(&query, SD_JSON_BUILD_OBJECT(
+                                       SD_JSON_BUILD_PAIR("groupName", SD_JSON_BUILD_STRING(name))));
         if (r < 0)
                 return r;
 
@@ -944,14 +944,14 @@ int groupdb_by_name(const char *name, UserDBFlags flags, GroupRecord **ret) {
 
 int groupdb_by_gid(gid_t gid, UserDBFlags flags, GroupRecord **ret) {
         _cleanup_(userdb_iterator_freep) UserDBIterator *iterator = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *query = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *query = NULL;
         int r;
 
         if (!gid_is_valid(gid))
                 return -EINVAL;
 
-        r = json_build(&query, JSON_BUILD_OBJECT(
-                                       JSON_BUILD_PAIR("gid", JSON_BUILD_UNSIGNED(gid))));
+        r = sd_json_build(&query, SD_JSON_BUILD_OBJECT(
+                                       SD_JSON_BUILD_PAIR("gid", SD_JSON_BUILD_UNSIGNED(gid))));
         if (r < 0)
                 return r;
 
@@ -1150,7 +1150,7 @@ static void discover_membership_dropins(UserDBIterator *i, UserDBFlags flags) {
 
 int membershipdb_by_user(const char *name, UserDBFlags flags, UserDBIterator **ret) {
         _cleanup_(userdb_iterator_freep) UserDBIterator *iterator = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *query = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *query = NULL;
         int r, qr;
 
         assert(ret);
@@ -1158,8 +1158,8 @@ int membershipdb_by_user(const char *name, UserDBFlags flags, UserDBIterator **r
         if (!valid_user_group_name(name, VALID_USER_RELAX))
                 return -EINVAL;
 
-        r = json_build(&query, JSON_BUILD_OBJECT(
-                                       JSON_BUILD_PAIR("userName", JSON_BUILD_STRING(name))));
+        r = sd_json_build(&query, SD_JSON_BUILD_OBJECT(
+                                       SD_JSON_BUILD_PAIR("userName", SD_JSON_BUILD_STRING(name))));
         if (r < 0)
                 return r;
 
@@ -1196,7 +1196,7 @@ int membershipdb_by_user(const char *name, UserDBFlags flags, UserDBIterator **r
 
 int membershipdb_by_group(const char *name, UserDBFlags flags, UserDBIterator **ret) {
         _cleanup_(userdb_iterator_freep) UserDBIterator *iterator = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *query = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *query = NULL;
         int r, qr;
 
         assert(ret);
@@ -1204,8 +1204,8 @@ int membershipdb_by_group(const char *name, UserDBFlags flags, UserDBIterator **
         if (!valid_user_group_name(name, VALID_USER_RELAX))
                 return -EINVAL;
 
-        r = json_build(&query, JSON_BUILD_OBJECT(
-                                       JSON_BUILD_PAIR("groupName", JSON_BUILD_STRING(name))));
+        r = sd_json_build(&query, SD_JSON_BUILD_OBJECT(
+                                       SD_JSON_BUILD_PAIR("groupName", SD_JSON_BUILD_STRING(name))));
         if (r < 0)
                 return r;
 

@@ -77,10 +77,10 @@ static void test_tokenizer_one(const char *data, ...) {
         va_end(ap);
 }
 
-typedef void (*Test)(JsonVariant *);
+typedef void (*Test)(sd_json_variant *);
 
 static void test_variant_one(const char *data, Test test) {
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL, *w = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL, *w = NULL;
         _cleanup_free_ char *s = NULL;
         int r;
 
@@ -88,51 +88,51 @@ static void test_variant_one(const char *data, Test test) {
         assert_se(cdata = cescape(data));
         log_info("/* %s data=\"%s\" */", __func__, cdata);
 
-        r = json_parse(data, 0, &v, NULL, NULL);
+        r = sd_json_parse(data, 0, &v, NULL, NULL);
         assert_se(r == 0);
         assert_se(v);
 
-        r = json_variant_format(v, 0, &s);
+        r = sd_json_variant_format(v, 0, &s);
         assert_se(r >= 0);
         assert_se(s);
         assert_se((size_t) r == strlen(s));
 
         log_info("formatted normally: %s\n", s);
 
-        r = json_parse(data, JSON_PARSE_SENSITIVE, &w, NULL, NULL);
+        r = sd_json_parse(data, SD_JSON_PARSE_SENSITIVE, &w, NULL, NULL);
         assert_se(r == 0);
         assert_se(w);
-        assert_se(json_variant_has_type(v, json_variant_type(w)));
-        assert_se(json_variant_has_type(w, json_variant_type(v)));
-        assert_se(json_variant_equal(v, w));
+        assert_se(sd_json_variant_has_type(v, sd_json_variant_type(w)));
+        assert_se(sd_json_variant_has_type(w, sd_json_variant_type(v)));
+        assert_se(sd_json_variant_equal(v, w));
 
         s = mfree(s);
-        w = json_variant_unref(w);
+        w = sd_json_variant_unref(w);
 
-        r = json_variant_format(v, JSON_FORMAT_PRETTY, &s);
+        r = sd_json_variant_format(v, SD_JSON_FORMAT_PRETTY, &s);
         assert_se(r >= 0);
         assert_se(s);
         assert_se((size_t) r == strlen(s));
 
         log_info("formatted prettily:\n%s", s);
 
-        r = json_parse(data, 0, &w, NULL, NULL);
+        r = sd_json_parse(data, 0, &w, NULL, NULL);
         assert_se(r == 0);
         assert_se(w);
 
-        assert_se(json_variant_has_type(v, json_variant_type(w)));
-        assert_se(json_variant_has_type(w, json_variant_type(v)));
-        assert_se(json_variant_equal(v, w));
+        assert_se(sd_json_variant_has_type(v, sd_json_variant_type(w)));
+        assert_se(sd_json_variant_has_type(w, sd_json_variant_type(v)));
+        assert_se(sd_json_variant_equal(v, w));
 
         s = mfree(s);
-        r = json_variant_format(v, JSON_FORMAT_COLOR, &s);
+        r = sd_json_variant_format(v, SD_JSON_FORMAT_COLOR, &s);
         assert_se(r >= 0);
         assert_se(s);
         assert_se((size_t) r == strlen(s));
         printf("Normal with color: %s\n", s);
 
         s = mfree(s);
-        r = json_variant_format(v, JSON_FORMAT_COLOR|JSON_FORMAT_PRETTY, &s);
+        r = sd_json_variant_format(v, SD_JSON_FORMAT_COLOR|SD_JSON_FORMAT_PRETTY, &s);
         assert_se(r >= 0);
         assert_se(s);
         assert_se((size_t) r == strlen(s));
@@ -142,209 +142,209 @@ static void test_variant_one(const char *data, Test test) {
                 test(v);
 }
 
-static void test_1(JsonVariant *v) {
-        JsonVariant *p, *q;
+static void test_1(sd_json_variant *v) {
+        sd_json_variant *p, *q;
         unsigned i;
 
         log_info("/* %s */", __func__);
 
         /* 3 keys + 3 values */
-        assert_se(json_variant_elements(v) == 6);
+        assert_se(sd_json_variant_elements(v) == 6);
 
         /* has k */
-        p = json_variant_by_key(v, "k");
-        assert_se(p && json_variant_type(p) == JSON_VARIANT_STRING);
+        p = sd_json_variant_by_key(v, "k");
+        assert_se(p && sd_json_variant_type(p) == SD_JSON_VARIANT_STRING);
 
         /* k equals v */
-        assert_se(streq(json_variant_string(p), "v"));
+        assert_se(streq(sd_json_variant_string(p), "v"));
 
         /* has foo */
-        p = json_variant_by_key(v, "foo");
-        assert_se(p && json_variant_type(p) == JSON_VARIANT_ARRAY && json_variant_elements(p) == 3);
+        p = sd_json_variant_by_key(v, "foo");
+        assert_se(p && sd_json_variant_type(p) == SD_JSON_VARIANT_ARRAY && sd_json_variant_elements(p) == 3);
 
         /* check  foo[0] = 1, foo[1] = 2, foo[2] = 3 */
         for (i = 0; i < 3; ++i) {
-                q = json_variant_by_index(p, i);
-                assert_se(q && json_variant_type(q) == JSON_VARIANT_UNSIGNED && json_variant_unsigned(q) == (i+1));
-                assert_se(q && json_variant_has_type(q, JSON_VARIANT_INTEGER) && json_variant_integer(q) == (i+1));
+                q = sd_json_variant_by_index(p, i);
+                assert_se(q && sd_json_variant_type(q) == SD_JSON_VARIANT_UNSIGNED && sd_json_variant_unsigned(q) == (i+1));
+                assert_se(q && sd_json_variant_has_type(q, SD_JSON_VARIANT_INTEGER) && sd_json_variant_integer(q) == (i+1));
         }
 
         /* has bar */
-        p = json_variant_by_key(v, "bar");
-        assert_se(p && json_variant_type(p) == JSON_VARIANT_OBJECT && json_variant_elements(p) == 2);
+        p = sd_json_variant_by_key(v, "bar");
+        assert_se(p && sd_json_variant_type(p) == SD_JSON_VARIANT_OBJECT && sd_json_variant_elements(p) == 2);
 
         /* zap is null */
-        q = json_variant_by_key(p, "zap");
-        assert_se(q && json_variant_type(q) == JSON_VARIANT_NULL);
+        q = sd_json_variant_by_key(p, "zap");
+        assert_se(q && sd_json_variant_type(q) == SD_JSON_VARIANT_NULL);
 }
 
-static void test_2(JsonVariant *v) {
-        JsonVariant *p, *q;
+static void test_2(sd_json_variant *v) {
+        sd_json_variant *p, *q;
 
         log_info("/* %s */", __func__);
 
         /* 2 keys + 2 values */
-        assert_se(json_variant_elements(v) == 4);
+        assert_se(sd_json_variant_elements(v) == 4);
 
         /* has mutant */
-        p = json_variant_by_key(v, "mutant");
-        assert_se(p && json_variant_type(p) == JSON_VARIANT_ARRAY && json_variant_elements(p) == 4);
+        p = sd_json_variant_by_key(v, "mutant");
+        assert_se(p && sd_json_variant_type(p) == SD_JSON_VARIANT_ARRAY && sd_json_variant_elements(p) == 4);
 
         /* mutant[0] == 1 */
-        q = json_variant_by_index(p, 0);
-        assert_se(q && json_variant_type(q) == JSON_VARIANT_UNSIGNED && json_variant_unsigned(q) == 1);
-        assert_se(q && json_variant_has_type(q, JSON_VARIANT_INTEGER) && json_variant_integer(q) == 1);
+        q = sd_json_variant_by_index(p, 0);
+        assert_se(q && sd_json_variant_type(q) == SD_JSON_VARIANT_UNSIGNED && sd_json_variant_unsigned(q) == 1);
+        assert_se(q && sd_json_variant_has_type(q, SD_JSON_VARIANT_INTEGER) && sd_json_variant_integer(q) == 1);
 
         /* mutant[1] == null */
-        q = json_variant_by_index(p, 1);
-        assert_se(q && json_variant_type(q) == JSON_VARIANT_NULL);
+        q = sd_json_variant_by_index(p, 1);
+        assert_se(q && sd_json_variant_type(q) == SD_JSON_VARIANT_NULL);
 
         /* mutant[2] == "1" */
-        q = json_variant_by_index(p, 2);
-        assert_se(q && json_variant_type(q) == JSON_VARIANT_STRING && streq(json_variant_string(q), "1"));
+        q = sd_json_variant_by_index(p, 2);
+        assert_se(q && sd_json_variant_type(q) == SD_JSON_VARIANT_STRING && streq(sd_json_variant_string(q), "1"));
 
-        /* mutant[3] == JSON_VARIANT_OBJECT */
-        q = json_variant_by_index(p, 3);
-        assert_se(q && json_variant_type(q) == JSON_VARIANT_OBJECT && json_variant_elements(q) == 2);
+        /* mutant[3] == SD_JSON_VARIANT_OBJECT */
+        q = sd_json_variant_by_index(p, 3);
+        assert_se(q && sd_json_variant_type(q) == SD_JSON_VARIANT_OBJECT && sd_json_variant_elements(q) == 2);
 
         /* has 1 */
-        p = json_variant_by_key(q, "1");
-        assert_se(p && json_variant_type(p) == JSON_VARIANT_ARRAY && json_variant_elements(p) == 2);
+        p = sd_json_variant_by_key(q, "1");
+        assert_se(p && sd_json_variant_type(p) == SD_JSON_VARIANT_ARRAY && sd_json_variant_elements(p) == 2);
 
         /* "1"[0] == 1 */
-        q = json_variant_by_index(p, 0);
-        assert_se(q && json_variant_type(q) == JSON_VARIANT_UNSIGNED && json_variant_unsigned(q) == 1);
-        assert_se(q && json_variant_has_type(q, JSON_VARIANT_INTEGER) && json_variant_integer(q) == 1);
+        q = sd_json_variant_by_index(p, 0);
+        assert_se(q && sd_json_variant_type(q) == SD_JSON_VARIANT_UNSIGNED && sd_json_variant_unsigned(q) == 1);
+        assert_se(q && sd_json_variant_has_type(q, SD_JSON_VARIANT_INTEGER) && sd_json_variant_integer(q) == 1);
 
         /* "1"[1] == "1" */
-        q = json_variant_by_index(p, 1);
-        assert_se(q && json_variant_type(q) == JSON_VARIANT_STRING && streq(json_variant_string(q), "1"));
+        q = sd_json_variant_by_index(p, 1);
+        assert_se(q && sd_json_variant_type(q) == SD_JSON_VARIANT_STRING && streq(sd_json_variant_string(q), "1"));
 
         /* has thisisaverylongproperty */
-        p = json_variant_by_key(v, "thisisaverylongproperty");
-        assert_se(p && json_variant_type(p) == JSON_VARIANT_REAL && fabsl(json_variant_real(p) - 1.27) < 0.001);
+        p = sd_json_variant_by_key(v, "thisisaverylongproperty");
+        assert_se(p && sd_json_variant_type(p) == SD_JSON_VARIANT_REAL && fabsl(sd_json_variant_real(p) - 1.27) < 0.001);
 }
 
-static void test_zeroes(JsonVariant *v) {
+static void test_zeroes(sd_json_variant *v) {
         /* Make sure zero is how we expect it. */
         log_info("/* %s */", __func__);
 
-        assert_se(json_variant_elements(v) == 13);
+        assert_se(sd_json_variant_elements(v) == 13);
 
-        for (size_t i = 0; i < json_variant_elements(v); i++) {
-                JsonVariant *w;
+        for (size_t i = 0; i < sd_json_variant_elements(v); i++) {
+                sd_json_variant *w;
                 size_t j;
 
-                assert_se(w = json_variant_by_index(v, i));
+                assert_se(w = sd_json_variant_by_index(v, i));
 
-                assert_se(json_variant_integer(w) == 0);
-                assert_se(json_variant_unsigned(w) == 0U);
+                assert_se(sd_json_variant_integer(w) == 0);
+                assert_se(sd_json_variant_unsigned(w) == 0U);
 
                 DISABLE_WARNING_FLOAT_EQUAL;
-                assert_se(json_variant_real(w) == 0.0L);
+                assert_se(sd_json_variant_real(w) == 0.0L);
                 REENABLE_WARNING;
 
-                assert_se(json_variant_is_integer(w));
-                assert_se(json_variant_is_unsigned(w));
-                assert_se(json_variant_is_real(w));
-                assert_se(json_variant_is_number(w));
+                assert_se(sd_json_variant_is_integer(w));
+                assert_se(sd_json_variant_is_unsigned(w));
+                assert_se(sd_json_variant_is_real(w));
+                assert_se(sd_json_variant_is_number(w));
 
-                assert_se(!json_variant_is_negative(w));
+                assert_se(!sd_json_variant_is_negative(w));
 
-                assert_se(IN_SET(json_variant_type(w), JSON_VARIANT_INTEGER, JSON_VARIANT_UNSIGNED, JSON_VARIANT_REAL));
+                assert_se(IN_SET(sd_json_variant_type(w), SD_JSON_VARIANT_INTEGER, SD_JSON_VARIANT_UNSIGNED, SD_JSON_VARIANT_REAL));
 
-                for (j = 0; j < json_variant_elements(v); j++) {
-                        JsonVariant *q;
+                for (j = 0; j < sd_json_variant_elements(v); j++) {
+                        sd_json_variant *q;
 
-                        assert_se(q = json_variant_by_index(v, j));
+                        assert_se(q = sd_json_variant_by_index(v, j));
 
-                        assert_se(json_variant_equal(w, q));
+                        assert_se(sd_json_variant_equal(w, q));
                 }
         }
 }
 
 TEST(build) {
-        _cleanup_(json_variant_unrefp) JsonVariant *a = NULL, *b = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *a = NULL, *b = NULL;
         _cleanup_free_ char *s = NULL, *t = NULL;
 
-        assert_se(json_build(&a, JSON_BUILD_STRING("hallo")) >= 0);
-        assert_se(json_build(&b, JSON_BUILD_LITERAL(" \"hallo\"   ")) >= 0);
-        assert_se(json_variant_equal(a, b));
+        assert_se(sd_json_build(&a, SD_JSON_BUILD_STRING("hallo")) >= 0);
+        assert_se(sd_json_build(&b, SD_JSON_BUILD_LITERAL(" \"hallo\"   ")) >= 0);
+        assert_se(sd_json_variant_equal(a, b));
 
-        b = json_variant_unref(b);
+        b = sd_json_variant_unref(b);
 
-        assert_se(json_build(&b, JSON_BUILD_VARIANT(a)) >= 0);
-        assert_se(json_variant_equal(a, b));
+        assert_se(sd_json_build(&b, SD_JSON_BUILD_VARIANT(a)) >= 0);
+        assert_se(sd_json_variant_equal(a, b));
 
-        b = json_variant_unref(b);
-        assert_se(json_build(&b, JSON_BUILD_STRING("pief")) >= 0);
-        assert_se(!json_variant_equal(a, b));
+        b = sd_json_variant_unref(b);
+        assert_se(sd_json_build(&b, SD_JSON_BUILD_STRING("pief")) >= 0);
+        assert_se(!sd_json_variant_equal(a, b));
 
-        a = json_variant_unref(a);
-        b = json_variant_unref(b);
+        a = sd_json_variant_unref(a);
+        b = sd_json_variant_unref(b);
 
-        assert_se(json_build(&a, JSON_BUILD_OBJECT(JSON_BUILD_PAIR("one", JSON_BUILD_INTEGER(7)),
-                                                   JSON_BUILD_PAIR("two", JSON_BUILD_REAL(2.0)),
-                                                   JSON_BUILD_PAIR("three", JSON_BUILD_INTEGER(0)))) >= 0);
+        assert_se(sd_json_build(&a, SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("one", SD_JSON_BUILD_INTEGER(7)),
+                                                   SD_JSON_BUILD_PAIR("two", SD_JSON_BUILD_REAL(2.0)),
+                                                   SD_JSON_BUILD_PAIR("three", SD_JSON_BUILD_INTEGER(0)))) >= 0);
 
-        assert_se(json_build(&b, JSON_BUILD_OBJECT(JSON_BUILD_PAIR("two", JSON_BUILD_INTEGER(2)),
-                                                   JSON_BUILD_PAIR("three", JSON_BUILD_REAL(0)),
-                                                   JSON_BUILD_PAIR("one", JSON_BUILD_REAL(7)))) >= 0);
+        assert_se(sd_json_build(&b, SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("two", SD_JSON_BUILD_INTEGER(2)),
+                                                   SD_JSON_BUILD_PAIR("three", SD_JSON_BUILD_REAL(0)),
+                                                   SD_JSON_BUILD_PAIR("one", SD_JSON_BUILD_REAL(7)))) >= 0);
 
-        assert_se(json_variant_equal(a, b));
+        assert_se(sd_json_variant_equal(a, b));
 
-        a = json_variant_unref(a);
-        b = json_variant_unref(b);
+        a = sd_json_variant_unref(a);
+        b = sd_json_variant_unref(b);
 
         const char* arr_1234[] = {"one", "two", "three", "four", NULL};
-        assert_se(json_build(&a, JSON_BUILD_ARRAY(JSON_BUILD_OBJECT(JSON_BUILD_PAIR("x", JSON_BUILD_BOOLEAN(true)),
-                                                                    JSON_BUILD_PAIR("y", JSON_BUILD_OBJECT(JSON_BUILD_PAIR("this", JSON_BUILD_NULL)))),
-                                                  JSON_BUILD_VARIANT(NULL),
-                                                  JSON_BUILD_LITERAL(NULL),
-                                                  JSON_BUILD_STRING(NULL),
-                                                  JSON_BUILD_NULL,
-                                                  JSON_BUILD_INTEGER(77),
-                                                  JSON_BUILD_ARRAY(JSON_BUILD_VARIANT(JSON_VARIANT_STRING_CONST("foobar")),
-                                                                   JSON_BUILD_VARIANT(JSON_VARIANT_STRING_CONST("zzz"))),
-                                                  JSON_BUILD_STRV((char**) arr_1234))) >= 0);
+        assert_se(sd_json_build(&a, SD_JSON_BUILD_ARRAY(SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("x", SD_JSON_BUILD_BOOLEAN(true)),
+                                                                    SD_JSON_BUILD_PAIR("y", SD_JSON_BUILD_OBJECT(SD_JSON_BUILD_PAIR("this", SD_JSON_BUILD_NULL)))),
+                                                  SD_JSON_BUILD_VARIANT(NULL),
+                                                  SD_JSON_BUILD_LITERAL(NULL),
+                                                  SD_JSON_BUILD_STRING(NULL),
+                                                  SD_JSON_BUILD_NULL,
+                                                  SD_JSON_BUILD_INTEGER(77),
+                                                  SD_JSON_BUILD_ARRAY(SD_JSON_BUILD_VARIANT(SD_JSON_VARIANT_STRING_CONST("foobar")),
+                                                                   SD_JSON_BUILD_VARIANT(SD_JSON_VARIANT_STRING_CONST("zzz"))),
+                                                  SD_JSON_BUILD_STRV((char**) arr_1234))) >= 0);
 
-        assert_se(json_variant_format(a, 0, &s) >= 0);
+        assert_se(sd_json_variant_format(a, 0, &s) >= 0);
         log_info("GOT: %s\n", s);
-        assert_se(json_parse(s, 0, &b, NULL, NULL) >= 0);
-        assert_se(json_variant_equal(a, b));
+        assert_se(sd_json_parse(s, 0, &b, NULL, NULL) >= 0);
+        assert_se(sd_json_variant_equal(a, b));
 
-        a = json_variant_unref(a);
-        b = json_variant_unref(b);
+        a = sd_json_variant_unref(a);
+        b = sd_json_variant_unref(b);
 
-        assert_se(json_build(&a, JSON_BUILD_REAL(M_PIl)) >= 0);
+        assert_se(sd_json_build(&a, SD_JSON_BUILD_REAL(M_PIl)) >= 0);
 
         s = mfree(s);
-        assert_se(json_variant_format(a, 0, &s) >= 0);
+        assert_se(sd_json_variant_format(a, 0, &s) >= 0);
         log_info("GOT: %s\n", s);
-        assert_se(json_parse(s, 0, &b, NULL, NULL) >= 0);
-        assert_se(json_variant_format(b, 0, &t) >= 0);
+        assert_se(sd_json_parse(s, 0, &b, NULL, NULL) >= 0);
+        assert_se(sd_json_variant_format(b, 0, &t) >= 0);
         log_info("GOT: %s\n", t);
 
         assert_se(streq(s, t));
 
-        a = json_variant_unref(a);
-        b = json_variant_unref(b);
+        a = sd_json_variant_unref(a);
+        b = sd_json_variant_unref(b);
 
-        assert_se(json_build(&a, JSON_BUILD_OBJECT(
-                                             JSON_BUILD_PAIR("x", JSON_BUILD_STRING("y")),
-                                             JSON_BUILD_PAIR("z", JSON_BUILD_CONST_STRING("a")),
-                                             JSON_BUILD_PAIR("b", JSON_BUILD_CONST_STRING("c"))
+        assert_se(sd_json_build(&a, SD_JSON_BUILD_OBJECT(
+                                             SD_JSON_BUILD_PAIR("x", SD_JSON_BUILD_STRING("y")),
+                                             SD_JSON_BUILD_PAIR("z", SD_JSON_BUILD_CONST_STRING("a")),
+                                             SD_JSON_BUILD_PAIR("b", SD_JSON_BUILD_CONST_STRING("c"))
                              )) >= 0);
 
-        assert_se(json_build(&b, JSON_BUILD_OBJECT(
-                                             JSON_BUILD_PAIR("x", JSON_BUILD_STRING("y")),
-                                             JSON_BUILD_PAIR_CONDITION(false, "p", JSON_BUILD_STRING("q")),
-                                             JSON_BUILD_PAIR_CONDITION(true, "z", JSON_BUILD_CONST_STRING("a")),
-                                             JSON_BUILD_PAIR_CONDITION(false, "j", JSON_BUILD_ARRAY(JSON_BUILD_STRING("k"), JSON_BUILD_CONST_STRING("u"), JSON_BUILD_CONST_STRING("i"))),
-                                             JSON_BUILD_PAIR("b", JSON_BUILD_CONST_STRING("c"))
+        assert_se(sd_json_build(&b, SD_JSON_BUILD_OBJECT(
+                                             SD_JSON_BUILD_PAIR("x", SD_JSON_BUILD_STRING("y")),
+                                             SD_JSON_BUILD_PAIR_CONDITION(false, "p", SD_JSON_BUILD_STRING("q")),
+                                             SD_JSON_BUILD_PAIR_CONDITION(true, "z", SD_JSON_BUILD_CONST_STRING("a")),
+                                             SD_JSON_BUILD_PAIR_CONDITION(false, "j", SD_JSON_BUILD_ARRAY(SD_JSON_BUILD_STRING("k"), SD_JSON_BUILD_CONST_STRING("u"), SD_JSON_BUILD_CONST_STRING("i"))),
+                                             SD_JSON_BUILD_PAIR("b", SD_JSON_BUILD_CONST_STRING("c"))
                              )) >= 0);
 
-        assert_se(json_variant_equal(a, b));
+        assert_se(sd_json_variant_equal(a, b));
 }
 
 TEST(source) {
@@ -365,7 +365,7 @@ TEST(source) {
                 "}\n";
 
         _cleanup_fclose_ FILE *f = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
 
         printf("--- original begin ---\n"
                "%s"
@@ -373,33 +373,33 @@ TEST(source) {
 
         assert_se(f = fmemopen_unlocked((void*) data, strlen(data), "r"));
 
-        assert_se(json_parse_file(f, "waldo", 0, &v, NULL, NULL) >= 0);
+        assert_se(sd_json_parse_file(f, "waldo", 0, &v, NULL, NULL) >= 0);
 
         printf("--- non-pretty begin ---\n");
-        json_variant_dump(v, 0, stdout, NULL);
+        sd_json_variant_dump(v, 0, stdout, NULL);
         printf("\n--- non-pretty end ---\n");
 
         printf("--- pretty begin ---\n");
-        json_variant_dump(v, JSON_FORMAT_PRETTY|JSON_FORMAT_COLOR|JSON_FORMAT_SOURCE, stdout, NULL);
+        sd_json_variant_dump(v, SD_JSON_FORMAT_PRETTY|SD_JSON_FORMAT_COLOR|SD_JSON_FORMAT_SOURCE, stdout, NULL);
         printf("--- pretty end ---\n");
 }
 
 TEST(depth) {
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         int r;
 
-        v = JSON_VARIANT_STRING_CONST("start");
+        v = SD_JSON_VARIANT_STRING_CONST("start");
 
         /* Let's verify that the maximum depth checks work */
 
         for (unsigned i = 0;; i++) {
-                _cleanup_(json_variant_unrefp) JsonVariant *w = NULL;
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *w = NULL;
 
                 assert_se(i <= UINT16_MAX);
                 if (i & 1)
-                        r = json_variant_new_array(&w, &v, 1);
+                        r = sd_json_variant_new_array(&w, &v, 1);
                 else
-                        r = json_variant_new_object(&w, (JsonVariant*[]) { JSON_VARIANT_STRING_CONST("key"), v }, 2);
+                        r = sd_json_variant_new_object(&w, (sd_json_variant*[]) { SD_JSON_VARIANT_STRING_CONST("key"), v }, 2);
                 if (r == -ELNRNG) {
                         log_info("max depth at %u", i);
                         break;
@@ -414,168 +414,168 @@ TEST(depth) {
 
                 assert_se(r >= 0);
 
-                json_variant_unref(v);
+                sd_json_variant_unref(v);
                 v = TAKE_PTR(w);
         }
 
-        json_variant_dump(v, 0, stdout, NULL);
+        sd_json_variant_dump(v, 0, stdout, NULL);
         fputs("\n", stdout);
 }
 
 TEST(normalize) {
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL, *w = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL, *w = NULL;
         _cleanup_free_ char *t = NULL;
 
-        assert_se(json_build(&v, JSON_BUILD_OBJECT(
-                                             JSON_BUILD_PAIR("b", JSON_BUILD_STRING("x")),
-                                             JSON_BUILD_PAIR("c", JSON_BUILD_CONST_STRING("y")),
-                                             JSON_BUILD_PAIR("a", JSON_BUILD_CONST_STRING("z")))) >= 0);
+        assert_se(sd_json_build(&v, SD_JSON_BUILD_OBJECT(
+                                             SD_JSON_BUILD_PAIR("b", SD_JSON_BUILD_STRING("x")),
+                                             SD_JSON_BUILD_PAIR("c", SD_JSON_BUILD_CONST_STRING("y")),
+                                             SD_JSON_BUILD_PAIR("a", SD_JSON_BUILD_CONST_STRING("z")))) >= 0);
 
-        assert_se(!json_variant_is_sorted(v));
-        assert_se(!json_variant_is_normalized(v));
+        assert_se(!sd_json_variant_is_sorted(v));
+        assert_se(!sd_json_variant_is_normalized(v));
 
-        assert_se(json_variant_format(v, 0, &t) >= 0);
+        assert_se(sd_json_variant_format(v, 0, &t) >= 0);
         assert_se(streq(t, "{\"b\":\"x\",\"c\":\"y\",\"a\":\"z\"}"));
         t = mfree(t);
 
-        assert_se(json_build(&w, JSON_BUILD_OBJECT(
-                                             JSON_BUILD_PAIR("bar", JSON_BUILD_STRING("zzz")),
-                                             JSON_BUILD_PAIR("foo", JSON_BUILD_VARIANT(v)))) >= 0);
+        assert_se(sd_json_build(&w, SD_JSON_BUILD_OBJECT(
+                                             SD_JSON_BUILD_PAIR("bar", SD_JSON_BUILD_STRING("zzz")),
+                                             SD_JSON_BUILD_PAIR("foo", SD_JSON_BUILD_VARIANT(v)))) >= 0);
 
-        assert_se(json_variant_is_sorted(w));
-        assert_se(!json_variant_is_normalized(w));
+        assert_se(sd_json_variant_is_sorted(w));
+        assert_se(!sd_json_variant_is_normalized(w));
 
-        assert_se(json_variant_format(w, 0, &t) >= 0);
+        assert_se(sd_json_variant_format(w, 0, &t) >= 0);
         assert_se(streq(t, "{\"bar\":\"zzz\",\"foo\":{\"b\":\"x\",\"c\":\"y\",\"a\":\"z\"}}"));
         t = mfree(t);
 
-        assert_se(json_variant_sort(&v) >= 0);
-        assert_se(json_variant_is_sorted(v));
-        assert_se(json_variant_is_normalized(v));
+        assert_se(sd_json_variant_sort(&v) >= 0);
+        assert_se(sd_json_variant_is_sorted(v));
+        assert_se(sd_json_variant_is_normalized(v));
 
-        assert_se(json_variant_format(v, 0, &t) >= 0);
+        assert_se(sd_json_variant_format(v, 0, &t) >= 0);
         assert_se(streq(t, "{\"a\":\"z\",\"b\":\"x\",\"c\":\"y\"}"));
         t = mfree(t);
 
-        assert_se(json_variant_normalize(&w) >= 0);
-        assert_se(json_variant_is_sorted(w));
-        assert_se(json_variant_is_normalized(w));
+        assert_se(sd_json_variant_normalize(&w) >= 0);
+        assert_se(sd_json_variant_is_sorted(w));
+        assert_se(sd_json_variant_is_normalized(w));
 
-        assert_se(json_variant_format(w, 0, &t) >= 0);
+        assert_se(sd_json_variant_format(w, 0, &t) >= 0);
         assert_se(streq(t, "{\"bar\":\"zzz\",\"foo\":{\"a\":\"z\",\"b\":\"x\",\"c\":\"y\"}}"));
         t = mfree(t);
 }
 
 TEST(bisect) {
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
 
-        /* Tests the bisection logic in json_variant_by_key() */
+        /* Tests the bisection logic in sd_json_variant_by_key() */
 
         for (char c = 'z'; c >= 'a'; c--) {
 
                 if ((c % 3) == 0)
                         continue;
 
-                _cleanup_(json_variant_unrefp) JsonVariant *w = NULL;
-                assert_se(json_variant_new_stringn(&w, (char[4]) { '<', c, c, '>' }, 4) >= 0);
-                assert_se(json_variant_set_field(&v, (char[2]) { c, 0 }, w) >= 0);
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *w = NULL;
+                assert_se(sd_json_variant_new_stringn(&w, (char[4]) { '<', c, c, '>' }, 4) >= 0);
+                assert_se(sd_json_variant_set_field(&v, (char[2]) { c, 0 }, w) >= 0);
         }
 
-        json_variant_dump(v, JSON_FORMAT_COLOR|JSON_FORMAT_PRETTY, NULL, NULL);
+        sd_json_variant_dump(v, SD_JSON_FORMAT_COLOR|SD_JSON_FORMAT_PRETTY, NULL, NULL);
 
-        assert_se(!json_variant_is_sorted(v));
-        assert_se(!json_variant_is_normalized(v));
-        assert_se(json_variant_normalize(&v) >= 0);
-        assert_se(json_variant_is_sorted(v));
-        assert_se(json_variant_is_normalized(v));
+        assert_se(!sd_json_variant_is_sorted(v));
+        assert_se(!sd_json_variant_is_normalized(v));
+        assert_se(sd_json_variant_normalize(&v) >= 0);
+        assert_se(sd_json_variant_is_sorted(v));
+        assert_se(sd_json_variant_is_normalized(v));
 
-        json_variant_dump(v, JSON_FORMAT_COLOR|JSON_FORMAT_PRETTY, NULL, NULL);
+        sd_json_variant_dump(v, SD_JSON_FORMAT_COLOR|SD_JSON_FORMAT_PRETTY, NULL, NULL);
 
         for (char c = 'a'; c <= 'z'; c++) {
-                JsonVariant *k;
+                sd_json_variant *k;
                 const char *z;
 
-                k = json_variant_by_key(v, (char[2]) { c, 0 });
+                k = sd_json_variant_by_key(v, (char[2]) { c, 0 });
                 assert_se(!k == ((c % 3) == 0));
 
                 if (!k)
                         continue;
 
-                assert_se(json_variant_is_string(k));
+                assert_se(sd_json_variant_is_string(k));
 
                 z = (char[5]){ '<', c, c, '>', 0};
-                assert_se(streq(json_variant_string(k), z));
+                assert_se(streq(sd_json_variant_string(k), z));
         }
 }
 
-static void test_float_match(JsonVariant *v) {
+static void test_float_match(sd_json_variant *v) {
         const double delta = 0.0001;
 
-        assert_se(json_variant_is_array(v));
-        assert_se(json_variant_elements(v) == 9);
-        assert_se(fabsl((double) 1.0 - ((double) DBL_MIN / json_variant_real(json_variant_by_index(v, 0)))) <= delta);
-        assert_se(fabsl((double) 1.0 - ((double) DBL_MAX / json_variant_real(json_variant_by_index(v, 1)))) <= delta);
-        assert_se(json_variant_is_null(json_variant_by_index(v, 2))); /* nan is not supported by json → null */
-        assert_se(json_variant_is_null(json_variant_by_index(v, 3))); /* +inf is not supported by json → null */
-        assert_se(json_variant_is_null(json_variant_by_index(v, 4))); /* -inf is not supported by json → null */
-        assert_se(json_variant_is_null(json_variant_by_index(v, 5)) ||
-                  fabsl((double) 1.0 - ((double) HUGE_VAL / json_variant_real(json_variant_by_index(v, 5)))) <= delta); /* HUGE_VAL might be +inf, but might also be something else */
-        assert_se(json_variant_is_real(json_variant_by_index(v, 6)) &&
-                  json_variant_is_integer(json_variant_by_index(v, 6)) &&
-                  json_variant_integer(json_variant_by_index(v, 6)) == 0);
-        assert_se(json_variant_is_real(json_variant_by_index(v, 7)) &&
-                  json_variant_is_integer(json_variant_by_index(v, 7)) &&
-                  json_variant_integer(json_variant_by_index(v, 7)) == 10);
-        assert_se(json_variant_is_real(json_variant_by_index(v, 8)) &&
-                  json_variant_is_integer(json_variant_by_index(v, 8)) &&
-                  json_variant_integer(json_variant_by_index(v, 8)) == -10);
+        assert_se(sd_json_variant_is_array(v));
+        assert_se(sd_json_variant_elements(v) == 9);
+        assert_se(fabsl((double) 1.0 - ((double) DBL_MIN / sd_json_variant_real(sd_json_variant_by_index(v, 0)))) <= delta);
+        assert_se(fabsl((double) 1.0 - ((double) DBL_MAX / sd_json_variant_real(sd_json_variant_by_index(v, 1)))) <= delta);
+        assert_se(sd_json_variant_is_null(sd_json_variant_by_index(v, 2))); /* nan is not supported by json → null */
+        assert_se(sd_json_variant_is_null(sd_json_variant_by_index(v, 3))); /* +inf is not supported by json → null */
+        assert_se(sd_json_variant_is_null(sd_json_variant_by_index(v, 4))); /* -inf is not supported by json → null */
+        assert_se(sd_json_variant_is_null(sd_json_variant_by_index(v, 5)) ||
+                  fabsl((double) 1.0 - ((double) HUGE_VAL / sd_json_variant_real(sd_json_variant_by_index(v, 5)))) <= delta); /* HUGE_VAL might be +inf, but might also be something else */
+        assert_se(sd_json_variant_is_real(sd_json_variant_by_index(v, 6)) &&
+                  sd_json_variant_is_integer(sd_json_variant_by_index(v, 6)) &&
+                  sd_json_variant_integer(sd_json_variant_by_index(v, 6)) == 0);
+        assert_se(sd_json_variant_is_real(sd_json_variant_by_index(v, 7)) &&
+                  sd_json_variant_is_integer(sd_json_variant_by_index(v, 7)) &&
+                  sd_json_variant_integer(sd_json_variant_by_index(v, 7)) == 10);
+        assert_se(sd_json_variant_is_real(sd_json_variant_by_index(v, 8)) &&
+                  sd_json_variant_is_integer(sd_json_variant_by_index(v, 8)) &&
+                  sd_json_variant_integer(sd_json_variant_by_index(v, 8)) == -10);
 }
 
 TEST(float) {
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL, *w = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL, *w = NULL;
         _cleanup_free_ char *text = NULL;
 
-        assert_se(json_build(&v, JSON_BUILD_ARRAY(
-                                             JSON_BUILD_REAL(DBL_MIN),
-                                             JSON_BUILD_REAL(DBL_MAX),
-                                             JSON_BUILD_REAL(NAN),
-                                             JSON_BUILD_REAL(INFINITY),
-                                             JSON_BUILD_REAL(-INFINITY),
-                                             JSON_BUILD_REAL(HUGE_VAL),
-                                             JSON_BUILD_REAL(0),
-                                             JSON_BUILD_REAL(10),
-                                             JSON_BUILD_REAL(-10))) >= 0);
+        assert_se(sd_json_build(&v, SD_JSON_BUILD_ARRAY(
+                                             SD_JSON_BUILD_REAL(DBL_MIN),
+                                             SD_JSON_BUILD_REAL(DBL_MAX),
+                                             SD_JSON_BUILD_REAL(NAN),
+                                             SD_JSON_BUILD_REAL(INFINITY),
+                                             SD_JSON_BUILD_REAL(-INFINITY),
+                                             SD_JSON_BUILD_REAL(HUGE_VAL),
+                                             SD_JSON_BUILD_REAL(0),
+                                             SD_JSON_BUILD_REAL(10),
+                                             SD_JSON_BUILD_REAL(-10))) >= 0);
 
-        json_variant_dump(v, JSON_FORMAT_COLOR|JSON_FORMAT_PRETTY, NULL, NULL);
+        sd_json_variant_dump(v, SD_JSON_FORMAT_COLOR|SD_JSON_FORMAT_PRETTY, NULL, NULL);
 
         test_float_match(v);
 
-        assert_se(json_variant_format(v, 0, &text) >= 0);
-        assert_se(json_parse(text, 0, &w, NULL, NULL) >= 0);
+        assert_se(sd_json_variant_format(v, 0, &text) >= 0);
+        assert_se(sd_json_parse(text, 0, &w, NULL, NULL) >= 0);
 
-        json_variant_dump(w, JSON_FORMAT_COLOR|JSON_FORMAT_PRETTY, NULL, NULL);
+        sd_json_variant_dump(w, SD_JSON_FORMAT_COLOR|SD_JSON_FORMAT_PRETTY, NULL, NULL);
 
         test_float_match(w);
 }
 
-static void test_equal_text(JsonVariant *v, const char *text) {
-        _cleanup_(json_variant_unrefp) JsonVariant *w = NULL;
+static void test_equal_text(sd_json_variant *v, const char *text) {
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *w = NULL;
 
-        assert_se(json_parse(text, 0, &w, NULL, NULL) >= 0);
-        assert_se(json_variant_equal(v, w) || (!v && json_variant_is_null(w)));
+        assert_se(sd_json_parse(text, 0, &w, NULL, NULL) >= 0);
+        assert_se(sd_json_variant_equal(v, w) || (!v && sd_json_variant_is_null(w)));
 }
 
 TEST(set_field) {
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
 
         test_equal_text(v, "null");
-        assert_se(json_variant_set_field(&v, "foo", NULL) >= 0);
+        assert_se(sd_json_variant_set_field(&v, "foo", NULL) >= 0);
         test_equal_text(v, "{\"foo\" : null}");
-        assert_se(json_variant_set_field(&v, "bar", JSON_VARIANT_STRING_CONST("quux")) >= 0);
+        assert_se(sd_json_variant_set_field(&v, "bar", SD_JSON_VARIANT_STRING_CONST("quux")) >= 0);
         test_equal_text(v, "{\"foo\" : null, \"bar\" : \"quux\"}");
-        assert_se(json_variant_set_field(&v, "foo", JSON_VARIANT_STRING_CONST("quux2")) >= 0);
+        assert_se(sd_json_variant_set_field(&v, "foo", SD_JSON_VARIANT_STRING_CONST("quux2")) >= 0);
         test_equal_text(v, "{\"foo\" : \"quux2\", \"bar\" : \"quux\"}");
-        assert_se(json_variant_set_field(&v, "bar", NULL) >= 0);
+        assert_se(sd_json_variant_set_field(&v, "bar", NULL) >= 0);
         test_equal_text(v, "{\"foo\" : \"quux2\", \"bar\" : null}");
 }
 

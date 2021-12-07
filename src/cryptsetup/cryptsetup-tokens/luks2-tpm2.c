@@ -57,11 +57,11 @@ int parse_luks2_tpm2_data(
                 char **ret_hex_policy_hash) {
 
         int r;
-        JsonVariant *w, *e;
+        sd_json_variant *w, *e;
         uint32_t pcr_mask = 0;
         uint16_t pcr_bank = UINT16_MAX, primary_alg = TPM2_ALG_ECC;
         _cleanup_free_ char *base64_blob = NULL, *hex_policy_hash = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
 
         assert(json);
         assert(ret_pcr_mask);
@@ -70,21 +70,21 @@ int parse_luks2_tpm2_data(
         assert(ret_base64_blob);
         assert(ret_hex_policy_hash);
 
-        r = json_parse(json, 0, &v, NULL, NULL);
+        r = sd_json_parse(json, 0, &v, NULL, NULL);
         if (r < 0)
                 return -EINVAL;
 
-        w = json_variant_by_key(v, "tpm2-pcrs");
-        if (!w || !json_variant_is_array(w))
+        w = sd_json_variant_by_key(v, "tpm2-pcrs");
+        if (!w || !sd_json_variant_is_array(w))
                 return -EINVAL;
 
-        JSON_VARIANT_ARRAY_FOREACH(e, w) {
+        SD_JSON_VARIANT_ARRAY_FOREACH(e, w) {
                 uint64_t u;
 
-                if (!json_variant_is_number(e))
+                if (!sd_json_variant_is_number(e))
                         return -EINVAL;
 
-                u = json_variant_unsigned(e);
+                u = sd_json_variant_unsigned(e);
                 if (u >= TPM2_PCRS_MAX)
                         return -EINVAL;
 
@@ -95,47 +95,47 @@ int parse_luks2_tpm2_data(
             search_pcr_mask != pcr_mask)
                 return -ENXIO;
 
-        w = json_variant_by_key(v, "tpm2-pcr-bank");
+        w = sd_json_variant_by_key(v, "tpm2-pcr-bank");
         if (w) {
                 /* The PCR bank field is optional */
 
-                if (!json_variant_is_string(w))
+                if (!sd_json_variant_is_string(w))
                         return -EINVAL;
 
-                r = tpm2_pcr_bank_from_string(json_variant_string(w));
+                r = tpm2_pcr_bank_from_string(sd_json_variant_string(w));
                 if (r < 0)
                         return r;
 
                 pcr_bank = r;
         }
 
-        w = json_variant_by_key(v, "tpm2-primary-alg");
+        w = sd_json_variant_by_key(v, "tpm2-primary-alg");
         if (w) {
                 /* The primary key algorithm is optional */
 
-                if (!json_variant_is_string(w))
+                if (!sd_json_variant_is_string(w))
                         return -EINVAL;
 
-                r = tpm2_primary_alg_from_string(json_variant_string(w));
+                r = tpm2_primary_alg_from_string(sd_json_variant_string(w));
                 if (r < 0)
                         return r;
 
                 primary_alg = r;
         }
 
-        w = json_variant_by_key(v, "tpm2-blob");
-        if (!w || !json_variant_is_string(w))
+        w = sd_json_variant_by_key(v, "tpm2-blob");
+        if (!w || !sd_json_variant_is_string(w))
                 return -EINVAL;
 
-        base64_blob = strdup(json_variant_string(w));
+        base64_blob = strdup(sd_json_variant_string(w));
         if (!base64_blob)
                 return -ENOMEM;
 
-        w = json_variant_by_key(v, "tpm2-policy-hash");
-        if (!w || !json_variant_is_string(w))
+        w = sd_json_variant_by_key(v, "tpm2-policy-hash");
+        if (!w || !sd_json_variant_is_string(w))
                 return -EINVAL;
 
-        hex_policy_hash = strdup(json_variant_string(w));
+        hex_policy_hash = strdup(sd_json_variant_string(w));
         if (!hex_policy_hash)
                 return -ENOMEM;
 

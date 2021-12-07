@@ -14,7 +14,7 @@ int enroll_recovery(
                 const void *volume_key,
                 size_t volume_key_size) {
 
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         _cleanup_(erase_and_freep) char *password = NULL;
         _cleanup_free_ char *keyslot_as_string = NULL;
         int keyslot, r, q;
@@ -75,10 +75,10 @@ int enroll_recovery(
                 goto rollback;
         }
 
-        r = json_build(&v,
-                       JSON_BUILD_OBJECT(
-                                       JSON_BUILD_PAIR("type", JSON_BUILD_CONST_STRING("systemd-recovery")),
-                                       JSON_BUILD_PAIR("keyslots", JSON_BUILD_ARRAY(JSON_BUILD_STRING(keyslot_as_string)))));
+        r = sd_json_build(&v,
+                       SD_JSON_BUILD_OBJECT(
+                                       SD_JSON_BUILD_PAIR("type", SD_JSON_BUILD_CONST_STRING("systemd-recovery")),
+                                       SD_JSON_BUILD_PAIR("keyslots", SD_JSON_BUILD_ARRAY(SD_JSON_BUILD_STRING(keyslot_as_string)))));
         if (r < 0) {
                 log_error_errno(r, "Failed to prepare recovery key JSON token object: %m");
                 goto rollback;

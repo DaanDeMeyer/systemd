@@ -110,8 +110,8 @@ int find_pkcs11_auto_data(
         /* Loads PKCS#11 metadata from LUKS2 JSON token headers. */
 
         for (int token = 0; token < sym_crypt_token_max(CRYPT_LUKS2); token++) {
-                _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
-                JsonVariant *w;
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
+                sd_json_variant *w;
                 int ks;
 
                 r = cryptsetup_get_token_as_json(cd, token, "systemd-pkcs11", &v);
@@ -135,12 +135,12 @@ int find_pkcs11_auto_data(
                 assert(keyslot < 0);
                 keyslot = ks;
 
-                w = json_variant_by_key(v, "pkcs11-uri");
-                if (!w || !json_variant_is_string(w))
+                w = sd_json_variant_by_key(v, "pkcs11-uri");
+                if (!w || !sd_json_variant_is_string(w))
                         return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
                                                "PKCS#11 token data lacks 'pkcs11-uri' field.");
 
-                uri = strdup(json_variant_string(w));
+                uri = strdup(sd_json_variant_string(w));
                 if (!uri)
                         return log_oom();
 
@@ -148,14 +148,14 @@ int find_pkcs11_auto_data(
                         return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
                                                "PKCS#11 token data contains invalid PKCS#11 URI.");
 
-                w = json_variant_by_key(v, "pkcs11-key");
-                if (!w || !json_variant_is_string(w))
+                w = sd_json_variant_by_key(v, "pkcs11-key");
+                if (!w || !sd_json_variant_is_string(w))
                         return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
                                                "PKCS#11 token data lacks 'pkcs11-key' field.");
 
                 assert(!key);
                 assert(key_size == 0);
-                r = unbase64mem(json_variant_string(w), SIZE_MAX, &key, &key_size);
+                r = unbase64mem(sd_json_variant_string(w), SIZE_MAX, &key, &key_size);
                 if (r < 0)
                         return log_error_errno(r, "Failed to decode base64 encoded key.");
         }

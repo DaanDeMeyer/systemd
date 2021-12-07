@@ -22,11 +22,11 @@ static int search_policy_hash(
                 return 0;
 
         for (int token = 0; token < sym_crypt_token_max(CRYPT_LUKS2); token ++) {
-                _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
                 _cleanup_free_ void *thash = NULL;
                 size_t thash_size = 0;
                 int keyslot;
-                JsonVariant *w;
+                sd_json_variant *w;
 
                 r = cryptsetup_get_token_as_json(cd, token, "systemd-tpm2", &v);
                 if (IN_SET(r, -ENOENT, -EINVAL, -EMEDIUMTYPE))
@@ -42,12 +42,12 @@ static int search_policy_hash(
                         continue;
                 }
 
-                w = json_variant_by_key(v, "tpm2-policy-hash");
-                if (!w || !json_variant_is_string(w))
+                w = sd_json_variant_by_key(v, "tpm2-policy-hash");
+                if (!w || !sd_json_variant_is_string(w))
                         return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
                                                "TPM2 token data lacks 'tpm2-policy-hash' field.");
 
-                r = unhexmem(json_variant_string(w), SIZE_MAX, &thash, &thash_size);
+                r = unhexmem(sd_json_variant_string(w), SIZE_MAX, &thash, &thash_size);
                 if (r < 0)
                         return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
                                                "Invalid base64 data in 'tpm2-policy-hash' field.");
@@ -66,7 +66,7 @@ int enroll_tpm2(struct crypt_device *cd,
                 uint32_t pcr_mask) {
 
         _cleanup_(erase_and_freep) void *secret = NULL, *secret2 = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         _cleanup_(erase_and_freep) char *base64_encoded = NULL;
         size_t secret_size, secret2_size, blob_size, hash_size;
         _cleanup_free_ void *blob = NULL, *hash = NULL;

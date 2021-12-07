@@ -1223,11 +1223,11 @@ int tpm2_make_luks2_json(
                 size_t blob_size,
                 const void *policy_hash,
                 size_t policy_hash_size,
-                JsonVariant **ret) {
+                sd_json_variant **ret) {
 
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL, *a = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL, *a = NULL;
         _cleanup_free_ char *keyslot_as_string = NULL;
-        JsonVariant* pcr_array[TPM2_PCRS_MAX];
+        sd_json_variant* pcr_array[TPM2_PCRS_MAX];
         unsigned n_pcrs = 0;
         int r;
 
@@ -1241,29 +1241,29 @@ int tpm2_make_luks2_json(
                 if ((pcr_mask & (UINT32_C(1) << i)) == 0)
                         continue;
 
-                r = json_variant_new_integer(pcr_array + n_pcrs, i);
+                r = sd_json_variant_new_integer(pcr_array + n_pcrs, i);
                 if (r < 0) {
-                        json_variant_unref_many(pcr_array, n_pcrs);
+                        sd_json_variant_unref_many(pcr_array, n_pcrs);
                         return -ENOMEM;
                 }
 
                 n_pcrs++;
         }
 
-        r = json_variant_new_array(&a, pcr_array, n_pcrs);
-        json_variant_unref_many(pcr_array, n_pcrs);
+        r = sd_json_variant_new_array(&a, pcr_array, n_pcrs);
+        sd_json_variant_unref_many(pcr_array, n_pcrs);
         if (r < 0)
                 return -ENOMEM;
 
-        r = json_build(&v,
-                       JSON_BUILD_OBJECT(
-                                       JSON_BUILD_PAIR("type", JSON_BUILD_CONST_STRING("systemd-tpm2")),
-                                       JSON_BUILD_PAIR("keyslots", JSON_BUILD_ARRAY(JSON_BUILD_STRING(keyslot_as_string))),
-                                       JSON_BUILD_PAIR("tpm2-blob", JSON_BUILD_BASE64(blob, blob_size)),
-                                       JSON_BUILD_PAIR("tpm2-pcrs", JSON_BUILD_VARIANT(a)),
-                                       JSON_BUILD_PAIR_CONDITION(!!tpm2_pcr_bank_to_string(pcr_bank), "tpm2-pcr-bank", JSON_BUILD_STRING(tpm2_pcr_bank_to_string(pcr_bank))),
-                                       JSON_BUILD_PAIR_CONDITION(!!tpm2_primary_alg_to_string(primary_alg), "tpm2-primary-alg", JSON_BUILD_STRING(tpm2_primary_alg_to_string(primary_alg))),
-                                       JSON_BUILD_PAIR("tpm2-policy-hash", JSON_BUILD_HEX(policy_hash, policy_hash_size))));
+        r = sd_json_build(&v,
+                       SD_JSON_BUILD_OBJECT(
+                                       SD_JSON_BUILD_PAIR("type", SD_JSON_BUILD_CONST_STRING("systemd-tpm2")),
+                                       SD_JSON_BUILD_PAIR("keyslots", SD_JSON_BUILD_ARRAY(SD_JSON_BUILD_STRING(keyslot_as_string))),
+                                       SD_JSON_BUILD_PAIR("tpm2-blob", SD_JSON_BUILD_BASE64(blob, blob_size)),
+                                       SD_JSON_BUILD_PAIR("tpm2-pcrs", SD_JSON_BUILD_VARIANT(a)),
+                                       SD_JSON_BUILD_PAIR_CONDITION(!!tpm2_pcr_bank_to_string(pcr_bank), "tpm2-pcr-bank", SD_JSON_BUILD_STRING(tpm2_pcr_bank_to_string(pcr_bank))),
+                                       SD_JSON_BUILD_PAIR_CONDITION(!!tpm2_primary_alg_to_string(primary_alg), "tpm2-primary-alg", SD_JSON_BUILD_STRING(tpm2_primary_alg_to_string(primary_alg))),
+                                       SD_JSON_BUILD_PAIR("tpm2-policy-hash", SD_JSON_BUILD_HEX(policy_hash, policy_hash_size))));
         if (r < 0)
                 return r;
 

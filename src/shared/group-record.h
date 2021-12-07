@@ -30,7 +30,7 @@ typedef struct GroupRecord {
         char **administrators;  /* maps to 'struct sgrp' .sg_adm field */
         char **hashed_password; /* maps to 'struct sgrp' .sg_passwd field */
 
-        JsonVariant *json;
+        sd_json_variant *json;
 } GroupRecord;
 
 GroupRecord* group_record_new(void);
@@ -39,7 +39,7 @@ GroupRecord* group_record_unref(GroupRecord *g);
 
 DEFINE_TRIVIAL_CLEANUP_FUNC(GroupRecord*, group_record_unref);
 
-int group_record_load(GroupRecord *h, JsonVariant *v, UserRecordLoadFlags flags);
+int group_record_load(GroupRecord *h, sd_json_variant *v, UserRecordLoadFlags flags);
 int group_record_build(GroupRecord **ret, ...);
 int group_record_clone(GroupRecord *g, UserRecordLoadFlags flags, GroupRecord **ret);
 

@@ -360,7 +360,7 @@ TEST(strv_wrapped) {
 }
 
 TEST(json) {
-        _cleanup_(json_variant_unrefp) JsonVariant *v = NULL, *w = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL, *w = NULL;
         _cleanup_(table_unrefp) Table *t = NULL;
 
         assert_se(t = table_new("foo bar", "quux", "piep miau"));
@@ -378,18 +378,18 @@ TEST(json) {
 
         assert_se(table_to_json(t, &v) >= 0);
 
-        assert_se(json_build(&w,
-                             JSON_BUILD_ARRAY(
-                                             JSON_BUILD_OBJECT(
-                                                             JSON_BUILD_PAIR("foo_bar", JSON_BUILD_CONST_STRING("v1")),
-                                                             JSON_BUILD_PAIR("quux", JSON_BUILD_UNSIGNED(4711)),
-                                                             JSON_BUILD_PAIR("zzz", JSON_BUILD_BOOLEAN(true))),
-                                             JSON_BUILD_OBJECT(
-                                                             JSON_BUILD_PAIR("foo_bar", JSON_BUILD_STRV(STRV_MAKE("a", "b", "c"))),
-                                                             JSON_BUILD_PAIR("quux", JSON_BUILD_NULL),
-                                                             JSON_BUILD_PAIR("zzz", JSON_BUILD_UNSIGNED(0755))))) >= 0);
+        assert_se(sd_json_build(&w,
+                             SD_JSON_BUILD_ARRAY(
+                                             SD_JSON_BUILD_OBJECT(
+                                                             SD_JSON_BUILD_PAIR("foo_bar", SD_JSON_BUILD_CONST_STRING("v1")),
+                                                             SD_JSON_BUILD_PAIR("quux", SD_JSON_BUILD_UNSIGNED(4711)),
+                                                             SD_JSON_BUILD_PAIR("zzz", SD_JSON_BUILD_BOOLEAN(true))),
+                                             SD_JSON_BUILD_OBJECT(
+                                                             SD_JSON_BUILD_PAIR("foo_bar", SD_JSON_BUILD_STRV(STRV_MAKE("a", "b", "c"))),
+                                                             SD_JSON_BUILD_PAIR("quux", SD_JSON_BUILD_NULL),
+                                                             SD_JSON_BUILD_PAIR("zzz", SD_JSON_BUILD_UNSIGNED(0755))))) >= 0);
 
-        assert_se(json_variant_equal(v, w));
+        assert_se(sd_json_variant_equal(v, w));
 }
 
 TEST(table) {

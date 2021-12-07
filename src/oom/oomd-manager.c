@@ -29,12 +29,12 @@ static void managed_oom_message_destroy(ManagedOOMMessage *message) {
         free(message->property);
 }
 
-static int managed_oom_mode(const char *name, JsonVariant *v, JsonDispatchFlags flags, void *userdata) {
+static int managed_oom_mode(const char *name, sd_json_variant *v, sd_json_dispatch_flags_t flags, void *userdata) {
         ManagedOOMMode *mode = userdata, m;
         const char *s;
 
         assert(mode);
-        assert_se(s = json_variant_string(v));
+        assert_se(s = sd_json_variant_string(v));
 
         m = managed_oom_mode_from_string(s);
         if (m < 0)
@@ -44,36 +44,36 @@ static int managed_oom_mode(const char *name, JsonVariant *v, JsonDispatchFlags 
         return 0;
 }
 
-static int process_managed_oom_message(Manager *m, uid_t uid, JsonVariant *parameters) {
-        JsonVariant *c, *cgroups;
+static int process_managed_oom_message(Manager *m, uid_t uid, sd_json_variant *parameters) {
+        sd_json_variant *c, *cgroups;
         int r;
 
-        static const JsonDispatch dispatch_table[] = {
-                { "mode",     JSON_VARIANT_STRING,   managed_oom_mode,     offsetof(ManagedOOMMessage, mode),     JSON_MANDATORY },
-                { "path",     JSON_VARIANT_STRING,   json_dispatch_string, offsetof(ManagedOOMMessage, path),     JSON_MANDATORY },
-                { "property", JSON_VARIANT_STRING,   json_dispatch_string, offsetof(ManagedOOMMessage, property), JSON_MANDATORY },
-                { "limit",    JSON_VARIANT_UNSIGNED, json_dispatch_uint32, offsetof(ManagedOOMMessage, limit),    0 },
+        static const sd_json_dispatch_t dispatch_table[] = {
+                { "mode",     SD_JSON_VARIANT_STRING,   managed_oom_mode,     offsetof(ManagedOOMMessage, mode),     SD_JSON_MANDATORY },
+                { "path",     SD_JSON_VARIANT_STRING,   sd_json_dispatch_string, offsetof(ManagedOOMMessage, path),     SD_JSON_MANDATORY },
+                { "property", SD_JSON_VARIANT_STRING,   sd_json_dispatch_string, offsetof(ManagedOOMMessage, property), SD_JSON_MANDATORY },
+                { "limit",    SD_JSON_VARIANT_UNSIGNED, sd_json_dispatch_uint32, offsetof(ManagedOOMMessage, limit),    0 },
                 {},
         };
 
         assert(m);
         assert(parameters);
 
-        cgroups = json_variant_by_key(parameters, "cgroups");
+        cgroups = sd_json_variant_by_key(parameters, "cgroups");
         if (!cgroups)
                 return -EINVAL;
 
         /* Skip malformed elements and keep processing in case the others are good */
-        JSON_VARIANT_ARRAY_FOREACH(c, cgroups) {
+        SD_JSON_VARIANT_ARRAY_FOREACH(c, cgroups) {
                 _cleanup_(managed_oom_message_destroy) ManagedOOMMessage message = {};
                 OomdCGroupContext *ctx;
                 Hashmap *monitor_hm;
                 loadavg_t limit;
 
-                if (!json_variant_is_object(c))
+                if (!sd_json_variant_is_object(c))
                         continue;
 
-                r = json_dispatch(c, dispatch_table, NULL, 0, &message);
+                r = sd_json_dispatch(c, dispatch_table, NULL, 0, &message);
                 if (r == -ENOMEM)
                         return r;
                 if (r < 0)
@@ -132,7 +132,7 @@ static int process_managed_oom_message(Manager *m, uid_t uid, JsonVariant *param
 
 static int process_managed_oom_request(
                 Varlink *link,
-                JsonVariant *parameters,
+                sd_json_variant *parameters,
                 VarlinkMethodFlags flags,
                 void *userdata) {
         Manager *m = userdata;
@@ -150,7 +150,7 @@ static int process_managed_oom_request(
 
 static int process_managed_oom_reply(
                 Varlink *link,
-                JsonVariant *parameters,
+                sd_json_variant *parameters,
                 const char *error_id,
                 VarlinkReplyFlags flags,
                 void *userdata) {

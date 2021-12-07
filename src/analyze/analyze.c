@@ -104,7 +104,7 @@ static unsigned arg_threshold = 100;
 static unsigned arg_iterations = 1;
 static usec_t arg_base_time = USEC_INFINITY;
 static char *arg_unit = NULL;
-static JsonFormatFlags arg_json_format_flags = JSON_FORMAT_OFF;
+static sd_json_format_flags_t arg_json_format_flags = SD_JSON_FORMAT_OFF;
 static bool arg_quiet = false;
 static char *arg_profile = NULL;
 
@@ -2388,7 +2388,7 @@ static int do_verify(int argc, char *argv[], void *userdata) {
 
 static int do_security(int argc, char *argv[], void *userdata) {
         _cleanup_(sd_bus_flush_close_unrefp) sd_bus *bus = NULL;
-        _cleanup_(json_variant_unrefp) JsonVariant *policy = NULL;
+        _cleanup_(sd_json_variant_unrefp) sd_json_variant *policy = NULL;
         int r;
         unsigned line, column;
 
@@ -2399,7 +2399,7 @@ static int do_security(int argc, char *argv[], void *userdata) {
         pager_open(arg_pager_flags);
 
         if (arg_security_policy) {
-                r = json_parse_file(/*f=*/ NULL, arg_security_policy, /*flags=*/ 0, &policy, &line, &column);
+                r = sd_json_parse_file(/*f=*/ NULL, arg_security_policy, /*flags=*/ 0, &policy, &line, &column);
                 if (r < 0)
                         return log_error_errno(r, "Failed to parse '%s' at %u:%u: %m", arg_security_policy, line, column);
         } else {
@@ -2411,7 +2411,7 @@ static int do_security(int argc, char *argv[], void *userdata) {
                         return r;
 
                 if (f) {
-                        r = json_parse_file(f, pp, /*flags=*/ 0, &policy, &line, &column);
+                        r = sd_json_parse_file(f, pp, /*flags=*/ 0, &policy, &line, &column);
                         if (r < 0)
                                 return log_error_errno(r, "[%s:%u:%u] Failed to parse JSON policy: %m", pp, line, column);
                 }
@@ -2767,7 +2767,7 @@ static int parse_argv(int argc, char *argv[]) {
                 return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
                                        "Option --offline= is only supported for security right now.");
 
-        if (arg_json_format_flags != JSON_FORMAT_OFF && !STRPTR_IN_SET(argv[optind], "security", "inspect-elf"))
+        if (arg_json_format_flags != SD_JSON_FORMAT_OFF && !STRPTR_IN_SET(argv[optind], "security", "inspect-elf"))
                 return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
                                        "Option --json= is only supported for security right now.");
 

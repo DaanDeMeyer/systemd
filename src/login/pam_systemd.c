@@ -128,10 +128,10 @@ static int acquire_user_record(
                 return r;
         }
         if (r == PAM_SUCCESS && json) {
-                _cleanup_(json_variant_unrefp) JsonVariant *v = NULL;
+                _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
 
                 /* Parse cached record */
-                r = json_parse(json, JSON_PARSE_SENSITIVE, &v, NULL, NULL);
+                r = sd_json_parse(json, SD_JSON_PARSE_SENSITIVE, &v, NULL, NULL);
                 if (r < 0) {
                         pam_syslog(handle, LOG_ERR, "Failed to parse JSON user record: %s", strerror_safe(r));
                         return PAM_SERVICE_ERR;
@@ -162,7 +162,7 @@ static int acquire_user_record(
                         return PAM_USER_UNKNOWN;
                 }
 
-                r = json_variant_format(ur->json, 0, &formatted);
+                r = sd_json_variant_format(ur->json, 0, &formatted);
                 if (r < 0) {
                         pam_syslog(handle, LOG_ERR, "Failed to format user JSON: %s", strerror_safe(r));
                         return PAM_SERVICE_ERR;
