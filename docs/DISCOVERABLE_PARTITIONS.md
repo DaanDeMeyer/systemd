@@ -241,7 +241,7 @@ setups. These types are defined with two modes of operation in mind:
    firmware-provided set of signing keys). If so, discovery and setup of a
    Verity volume may be fully automatic: if the root partition's UUID is chosen
    to match the first 128 bit of the root hash, and the matching Verity
-   partition UUIDs is chosen to match the last 128bit of the root hash, then
+   partition UUIDs are chosen to match the last 128bit of the root hash, then
    automatic discovery and match-up of the two partitions is possible, as the
    root hash is enough to both find the partitions and then combine them in a
    Verity volume. In this mode a Verity signature partition is not used and
