@@ -475,8 +475,14 @@ static int install_binaries(const char *esp_path, const char *arch, bool force) 
                 if (!endswith_no_case(de->d_name, suffix) && !endswith_no_case(de->d_name, suffix_signed))
                         continue;
 
+                if (arg_signed > 0 && !endswith_no_case(de->d_name, suffix_signed))
+                        continue;
+
+                if (arg_signed == 0 && endswith_no_case(de->d_name, suffix_signed))
+                        continue;
+
                 /* skip the .efi file, if there's a .signed version of it */
-                if (endswith_no_case(de->d_name, ".efi")) {
+                if (endswith_no_case(de->d_name, ".efi") && arg_signed < 0) {
                         _cleanup_free_ const char *s = strjoin(de->d_name, ".signed");
                         if (!s)
                                 return log_oom();

@@ -498,6 +498,17 @@
         <xi:include href="version-info.xml" xpointer="v253"/></listitem>
       </varlistentry>
 
+      <varlistentry>
+        <term><option>--signed</option></term>
+
+        <listitem><para>Specifies whether to install signed or unsigned binaries. Takes a boolean value.
+        If unset, signed binaries will be installed if available and otherwise unsigned binaries will be
+        installed. If enabled, only signed binaries will be installed. If disabled, only unsigned binaries
+        will be installed.</para>
+
+        <xi:include href="version-info.xml" xpointer="v256"/></listitem>
+      </varlistentry>
+
       <xi:include href="standard-options.xml" xpointer="no-pager"/>
       <xi:include href="standard-options.xml" xpointer="json" />
       <xi:include href="standard-options.xml" xpointer="help"/>

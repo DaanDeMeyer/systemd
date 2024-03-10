@@ -56,6 +56,7 @@ char *arg_efi_boot_option_description = NULL;
 bool arg_dry_run = false;
 ImagePolicy *arg_image_policy = NULL;
 bool arg_varlink = false;
+int arg_signed = -1;
 
 STATIC_DESTRUCTOR_REGISTER(arg_esp_path, freep);
 STATIC_DESTRUCTOR_REGISTER(arg_xbootldr_path, freep);
@@ -201,6 +202,7 @@ static int help(int argc, char *argv[], void *userdata) {
                "     --efi-boot-option-description=DESCRIPTION\n"
                "                       Description of the entry in the boot option list\n"
                "     --dry-run         Dry run (unlink and cleanup)\n"
+               "     --signed=BOOL     Whether to install signed or unsigned binaries\n"
                "\nSee the %2$s for details.\n",
                program_invocation_short_name,
                link,
@@ -230,6 +232,7 @@ static int parse_argv(int argc, char *argv[]) {
                 ARG_ARCH_ALL,
                 ARG_EFI_BOOT_OPTION_DESCRIPTION,
                 ARG_DRY_RUN,
+                ARG_SIGNED,
         };
 
         static const struct option options[] = {
@@ -257,6 +260,7 @@ static int parse_argv(int argc, char *argv[]) {
                 { "all-architectures",           no_argument,       NULL, ARG_ARCH_ALL                    },
                 { "efi-boot-option-description", required_argument, NULL, ARG_EFI_BOOT_OPTION_DESCRIPTION },
                 { "dry-run",                     no_argument,       NULL, ARG_DRY_RUN                     },
+                { "signed",                      required_argument, NULL, ARG_SIGNED                      },
                 {}
         };
 
@@ -393,6 +397,14 @@ static int parse_argv(int argc, char *argv[]) {
 
                 case ARG_DRY_RUN:
                         arg_dry_run = true;
+                        break;
+
+                case ARG_SIGNED:
+                        r = parse_boolean_argument("--signed=", optarg, NULL);
+                        if (r < 0)
+                                return r;
+
+                        arg_signed = r;
                         break;
 
                 case '?':
