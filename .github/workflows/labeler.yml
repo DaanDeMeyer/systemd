@@ -61,7 +61,7 @@ jobs:
             "good-to-merge/waiting-for-reporter-feedback 👍",
           ]);
 
-          if (labels.intersection(good_to_merge).size == 0) {
+          if (Array.from(labels).filter(l => good_to_merge.has(l)).length == 0) {
             labels.add("please-review");
           }
 
@@ -72,12 +72,12 @@ jobs:
             labels.delete(label);
           }
 
-          if (labels.size != original.size || [...labels].some(l => !original.has(l))) {
-            response = await github.rest.issues.setLabels({
+          if (labels.size != original.size || Array.from(labels).some(l => !original.has(l))) {
+            await github.rest.issues.setLabels({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              labels: Array.from(labels).map(l => {"name": l}),
+              labels: Array.from(labels),
             });
           }
 
