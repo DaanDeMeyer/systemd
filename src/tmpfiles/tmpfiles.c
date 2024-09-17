@@ -116,6 +116,8 @@ typedef enum ItemType {
         RELABEL_PATH                   = 'z',
         RECURSIVE_RELABEL_PATH         = 'Z',
         ADJUST_MODE                    = 'm', /* legacy, 'z' is identical to this */
+        REMOVE_SYMLINK                 = 'g',
+        RECURSIVE_REMOVE_SYMLINK       = 'G',
 } ItemType;
 
 typedef enum AgeBy {
@@ -2827,6 +2829,8 @@ static int create_item(Context *c, Item *i) {
         case IGNORE_DIRECTORY_PATH:
         case REMOVE_PATH:
         case RECURSIVE_REMOVE_PATH:
+        case REMOVE_SYMLINK:
+        case RECURSIVE_REMOVE_SYMLINK:
                 return 0;
 
         case TRUNCATE_FILE:
@@ -3054,7 +3058,7 @@ static int purge_item(Context *c, Item *i) {
         return purge_item_instance(c, i, i->path, CREATION_EXISTING);
 }
 
-static int remove_item_instance(
+static int remove_path_instance(
                 Context *c,
                 Item *i,
                 const char *instance,
@@ -3066,6 +3070,38 @@ static int remove_item_instance(
         switch (i->type) {
 
         case REMOVE_PATH:
+                log_action("Would remove", "Removing", "%s \"%s\".", instance);
+                if (!arg_dry_run &&
+                    remove(instance) < 0 &&
+                    errno != ENOENT)
+                        return log_error_errno(errno, "rm %s: %m", instance);
+
+                return 0;
+
+        case RECURSIVE_REMOVE_PATH:
+                return remove_recursive(c, i, instance, /* remove_instance= */ true);
+
+        default:
+                assert_not_reached();
+        }
+}
+
+static int remove_symlink_instance(
+                Context *c,
+                Item *i,
+                const char *instance,
+                CreationMode creation) {
+
+        int r;
+
+        assert(c);
+        assert(i);
+
+        switch (i->type) {
+
+        case REMOVE_SYMLINK:
+                if (lstat(instance) < 0)
+                        return log_error_errno(errno, "Failed to stat ")
                 log_action("Would remove", "Removing", "%s \"%s\".", instance);
                 if (!arg_dry_run &&
                     remove(instance) < 0 &&
@@ -3095,7 +3131,11 @@ static int remove_item(Context *c, Item *i) {
 
         case REMOVE_PATH:
         case RECURSIVE_REMOVE_PATH:
-                return glob_item(c, i, remove_item_instance);
+                return glob_item(c, i, remove_path_instance);
+
+        case REMOVE_SYMLINK:
+        case RECURSIVE_REMOVE_SYMLINK:
+                return glob_item(c, i, remove_symlink_instance);
 
         default:
                 return 0;

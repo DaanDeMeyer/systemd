@@ -486,6 +486,25 @@ L     /tmp/foobar -    -    -     -   /dev/null</programlisting>
 
           <xi:include href="version-info.xml" xpointer="v219"/></listitem>
         </varlistentry>
+
+        <varlistentry>
+          <term><varname>g</varname></term>
+
+          <listitem><para>Remove a symlink if it exists and is a danglink symlink. Optionally, the argument
+          field may contain a path. If so, the danglink symlink is only removed if it resolves into this
+          path.</para></listitem>
+
+          <xi:include href="version-info.xml" xpointer="v257"/></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term><varname>G</varname></term>
+
+          <listitem><para>Same as <varname>g</varname>, but recursively removes all dangling symlinks within
+          the specified directory.</para>
+
+          <xi:include href="version-info.xml" xpointer="v257"/></listitem>
+        </varlistentry>
       </variablelist>
     </refsect2>
 
