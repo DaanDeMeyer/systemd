@@ -17,6 +17,17 @@ typedef enum Fido2EnrollFlags {
         _FIDO2ENROLL_TYPE_INVALID = -EINVAL,
 } Fido2EnrollFlags;
 
+typedef struct Fido2Device {
+        char *path;
+        char *manufacturer;
+        char *product;
+} Fido2Device;
+
+void* fido2_device_free(Fido2Device *device);
+void fido2_device_free_many(Fido2Device *device, size_t n);
+
+DEFINE_TRIVIAL_CLEANUP_FUNC(Fido2Device*, fido2_device_free);
+
 #if HAVE_LIBFIDO2
 #include <fido.h>
 
@@ -132,6 +143,7 @@ static inline int parse_fido2_algorithm(const char *s, int *ret) {
 }
 #endif
 
+int fido2_get_devices(Fido2Device **ret_devices, size_t *ret_n_devices);
 int fido2_list_devices(void);
 int fido2_find_device_auto(char **ret);
 

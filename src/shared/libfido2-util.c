@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 
 #include "libfido2-util.h"
+#include "memory-util-fundamental.h"
 
 #if HAVE_LIBFIDO2
 #include "alloc-util.h"
@@ -63,6 +64,24 @@ DLSYM_PROTOTYPE(fido_dev_close) = NULL;
 DLSYM_PROTOTYPE(fido_init) = NULL;
 DLSYM_PROTOTYPE(fido_set_log_handler) = NULL;
 DLSYM_PROTOTYPE(fido_strerr) = NULL;
+
+static void fido2_device_done(Fido2Device *device) {
+        assert(device);
+
+        device->path = mfree(device->path);
+        device->manufacturer = mfree(device->manufacturer);
+        device->product = mfree(device->product);
+}
+
+void fido2_device_free_many(Fido2Device *devices, size_t n) {
+        assert(devices || n == 0);
+
+        FOREACH_ARRAY(device, devices, n)
+                fido2_device_done(device);
+
+        free(devices);
+}
+
 
 static void fido_log_propagate_handler(const char *s) {
         log_debug("libfido2: %s", strempty(s));
@@ -1097,12 +1116,17 @@ static int check_device_is_fido2_with_hmac_secret(const char *path) {
 }
 #endif
 
-int fido2_list_devices(void) {
+int fido2_get_devices(Fido2Device **ret_devices, size_t *ret_n_devices) {
 #if HAVE_LIBFIDO2
-        _cleanup_(table_unrefp) Table *t = NULL;
-        size_t allocated = 64, found = 0;
+        size_t allocated = 64, found = 0, n_devices = 0;
         fido_dev_info_t *di = NULL;
+        Fido2Device *devices = NULL;
         int r;
+
+        assert(ret_devices);
+        assert(ret_n_devices);
+
+        CLEANUP_ARRAY(devices, n_devices, fido2_device_free_many);
 
         r = dlopen_libfido2();
         if (r < 0)
@@ -1124,12 +1148,6 @@ int fido2_list_devices(void) {
                 goto finish;
         }
 
-        t = table_new("path", "manufacturer", "product");
-        if (!t) {
-                r = log_oom();
-                goto finish;
-        }
-
         for (size_t i = 0; i < found; i++) {
                 const fido_dev_info_t *entry;
 
@@ -1146,24 +1164,27 @@ int fido2_list_devices(void) {
                 if (!r)
                         continue;
 
-                r = table_add_many(
-                                t,
-                                TABLE_PATH, sym_fido_dev_info_path(entry),
-                                TABLE_STRING, sym_fido_dev_info_manufacturer_string(entry),
-                                TABLE_STRING, sym_fido_dev_info_product_string(entry));
-                if (r < 0) {
-                        table_log_add_error(r);
+                _cleanup_(fido2_device_done) Fido2Device device = {
+                        .path = strdup(sym_fido_dev_info_path(entry)),
+                        .manufacturer = strdup(sym_fido_dev_info_manufacturer_string(entry)),
+                        .product = strdup(sym_fido_dev_info_product_string(entry)),
+                };
+                if (!device.path || !device.manufacturer || !device.product) {
+                        r = log_oom();
                         goto finish;
                 }
+
+                if (!GREEDY_REALLOC(devices, n_devices + 1)) {
+                        r = log_oom();
+                        goto finish;
+                }
+
+                devices[n_devices++] = TAKE_STRUCT(device);
         }
 
-        r = table_print(t, stdout);
-        if (r < 0) {
-                log_error_errno(r, "Failed to show device table: %m");
-                goto finish;
-        }
-
-        r = 0;
+        *ret_devices = TAKE_PTR(devices);
+        *ret_n_devices = n_devices;
+        return 0;
 
 finish:
         sym_fido_dev_info_free(&di, allocated);
@@ -1172,6 +1193,39 @@ finish:
         return log_error_errno(SYNTHETIC_ERRNO(EOPNOTSUPP),
                                "FIDO2 tokens not supported on this build.");
 #endif
+}
+
+int fido2_list_devices(void) {
+        _cleanup_(table_unrefp) Table *t = NULL;
+        Fido2Device *devices = NULL;
+        size_t n_devices = 0;
+        int r;
+
+        CLEANUP_ARRAY(devices, n_devices, fido2_device_free_many);
+
+        r = fido2_get_devices(&devices, &n_devices);
+        if (r < 0)
+                return r;
+
+        t = table_new("path", "manufacturer", "product");
+        if (!t)
+                return log_oom();
+
+        FOREACH_ARRAY(device, devices, n_devices) {
+                r = table_add_many(
+                                t,
+                                TABLE_PATH,   device->path,
+                                TABLE_STRING, device->manufacturer,
+                                TABLE_STRING, device->product);
+                if (r < 0)
+                        return table_log_add_error(r);
+        }
+
+        r = table_print(t, stdout);
+        if (r < 0)
+                return log_error_errno(r, "Failed to show device table: %m");
+
+        return 0;
 }
 
 int fido2_find_device_auto(char **ret) {

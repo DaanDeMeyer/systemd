@@ -2636,6 +2636,86 @@ static int create_interactively(void) {
                         return log_error_errno(r, "Failed to set shell field: %m");
         }
 
+        Fido2Device *devices = NULL;
+        size_t n_devices = 0;
+        _cleanup_free_ char *fido2_device = NULL;
+
+        CLEANUP_ARRAY(devices, n_devices, fido2_device_free_many);
+
+        r = fido2_get_devices(&devices, &n_devices);
+        if (r < 0)
+                return r;
+
+        if (n_devices == 0)
+                log_debug("No FIDO2 devices found, skipping FIDO2 setup.");
+        else if (n_devices > 0) {
+                _cleanup_(table_unrefp) Table *t = NULL;
+
+                log_notice("Found %zu FIDO2 devices.", n_devices);
+
+                t = table_new("id", "path", "manufacturer", "product");
+                if (!t)
+                        return log_oom();
+
+                for (size_t i = 0; i < n_devices; i++) {
+                        r = table_add_many(
+                                        t,
+                                        TABLE_SIZE,   i + 1,
+                                        TABLE_PATH,   devices[i].path,
+                                        TABLE_STRING, devices[i].manufacturer,
+                                        TABLE_STRING, devices[i].product);
+                        if (r < 0)
+                                return table_log_add_error(r);
+                }
+
+                r = table_print(t, stdout);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to show device table: %m");
+
+                _cleanup_free_ char *s = NULL;
+
+                for (;;) {
+                        s = mfree(s);
+
+                        r = ask_string(&s,
+                                       "%s Enter the ID of the FIDO2 device to enroll for user %s (empty to skip): ",
+                                       special_glyph(SPECIAL_GLYPH_TRIANGULAR_BULLET), username);
+                        if (r < 0)
+                                return log_error_errno(r, "Failed to query user for username: %m");
+
+                        if (isempty(s)) {
+                                log_info("No data entered, skipping.");
+                                break;
+                        }
+
+                        unsigned id;
+                        r = safe_atou(s, &id);
+                        if (r < 0) {
+                                log_error("%s is not a valid FIDO2 device ID", s);
+                                continue;
+                        }
+
+                        if (id <= 0 || id > n_devices) {
+                                log_error("Specified FIDO2 device ID out of range.");
+                                continue;
+                        }
+
+                        fido2_device = strdup(devices[id-1].path);
+                        if (!fido2_device)
+                                return log_oom();
+
+                        log_info("Selected '%s'.", fido2_device);
+
+                        break;
+                }
+        }
+
+        if (fido2_device) {
+                r = identity_add_fido2_parameters(&arg_identity_extra, fido2_device, arg_fido2_lock_with, arg_fido2_cred_alg);
+                if (r < 0)
+                        return r;
+        }
+
         return create_home_common(/* input= */ NULL);
 }
 
