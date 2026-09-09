@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mount.h>
-#include <sys/pidfd.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -42,11 +41,9 @@
 #include "format-table.h"
 #include "format-util.h"
 #include "fs-util.h"
-#include "help-util.h"
 #include "hostname-util.h"
 #include "log.h"
 #include "main-func.h"
-#include "options.h"
 #include "osc-context.h"
 #include "pager.h"
 #include "parse-argument.h"
@@ -57,6 +54,7 @@
 #include "pretty-print.h"
 #include "process-util.h"
 #include "ptyfwd.h"
+#include "run-polkit.h"
 #include "runtime-scope.h"
 #include "signal-util.h"
 #include "special.h"
@@ -68,6 +66,7 @@
 #include "unit-def.h"
 #include "unit-name.h"
 #include "user-util.h"
+#include "verbs.h"
 #include "virt.h"
 
 static bool arg_ask_password = true;
@@ -110,7 +109,6 @@ static int arg_pty_late = -1; /* tristate */
 static char **arg_path_property = NULL;
 static char **arg_socket_property = NULL;
 static char **arg_timer_property = NULL;
-static bool arg_with_timer = false;
 static bool arg_quiet = false;
 static bool arg_verbose = false;
 static OutputMode arg_output = _OUTPUT_MODE_INVALID;
@@ -146,68 +144,14 @@ STATIC_DESTRUCTOR_REGISTER(arg_background, freep);
 STATIC_DESTRUCTOR_REGISTER(arg_shell_prompt_prefix, freep);
 STATIC_DESTRUCTOR_REGISTER(arg_area, freep);
 
-static int help(void) {
-        int r;
-
-        pager_open(arg_pager_flags);
-
-        static const char* const groups[] = {
-                NULL,
-                "Path options",
-                "Socket options",
-                "Timer options",
-        };
-
-        Table *tables[ELEMENTSOF(groups)] = {};
-        CLEANUP_ELEMENTS(tables, table_unref_array_clear);
-
-        for (size_t i = 0; i < ELEMENTSOF(groups); i++) {
-                r = option_parser_get_help_table_full("systemd-run", groups[i], &tables[i]);
-                if (r < 0)
-                        return r;
-        }
-
-        (void) table_sync_column_widths(0, tables[0], tables[1], tables[2], tables[3]);
-
-        help_cmdline("[OPTIONS...] COMMAND [ARGUMENTS...]");
-        help_abstract("Run the specified command in a transient scope or service.");
-
-        for (size_t i = 0; i < ELEMENTSOF(groups); i++) {
-                help_section(groups[i] ?: "Options");
-
-                r = table_print_or_warn(tables[i]);
-                if (r < 0)
-                        return r;
-        }
-
-        help_man_page_reference("systemd-run", "1");
-        return 0;
-}
-
-static int help_sudo_mode(void) {
-        _cleanup_(table_unrefp) Table *opts_table = NULL;
-        int r;
-
-        /* NB: Let's not go overboard with short options: we try to keep a modicum of compatibility with
-         * sudo's short switches, hence please do not introduce new short switches unless they have a roughly
-         * equivalent purpose on sudo. Use long options for everything private to run0. */
-
-        r = option_parser_get_help_table_ns("run0", &opts_table);
-        if (r < 0)
-                return r;
-
-        help_cmdline("[OPTIONS...] COMMAND [ARGUMENTS...]");
-        help_abstract("Elevate privileges interactively.");
-
-        help_section("Options");
-
-        r = table_print_or_warn(opts_table);
-        if (r < 0)
-                return r;
-
-        help_man_page_reference("run0", "1");
-        return 0;
-}
+COMMAND(
+        "systemd-run\0",
+        "Run the specified command in a transient scope or service.",
+        .argspec = "COMMAND [ARGUMENTS…]\0",
+        .man_pages = "systemd-run(1)\0",
+        .option_namespace = "systemd-run",
+        .pager_flags = &arg_pager_flags,
+);
 
 static bool become_root(void) {
         if (arg_runtime_scope != RUNTIME_SCOPE_SYSTEM)
@@ -264,7 +208,7 @@ static int parse_argv(int argc, char *argv[]) {
                 OPTION_NAMESPACE("systemd-run"): {}
 
                 OPTION_COMMON_HELP:
-                        return help();
+                        return command_print_help_name("systemd-run");
 
                 OPTION_COMMON_VERSION:
                         return version();
@@ -513,7 +457,6 @@ static int parse_argv(int argc, char *argv[]) {
                         if (r < 0)
                                 return r;
 
-                        arg_with_timer = true;
                         break;
 
                 OPTION_LONG("on-boot", "SECONDS", "Run SECONDS after machine was booted up"):
@@ -521,7 +464,6 @@ static int parse_argv(int argc, char *argv[]) {
                         if (r < 0)
                                 return r;
 
-                        arg_with_timer = true;
                         break;
 
                 OPTION_LONG("on-startup", "SECONDS", "Run SECONDS after systemd activation"):
@@ -529,7 +471,6 @@ static int parse_argv(int argc, char *argv[]) {
                         if (r < 0)
                                 return r;
 
-                        arg_with_timer = true;
                         break;
 
                 OPTION_LONG("on-unit-active", "SECONDS", "Run SECONDS after the last activation"):
@@ -537,7 +478,6 @@ static int parse_argv(int argc, char *argv[]) {
                         if (r < 0)
                                 return r;
 
-                        arg_with_timer = true;
                         break;
 
                 OPTION_LONG("on-unit-inactive", "SECONDS",
@@ -546,7 +486,6 @@ static int parse_argv(int argc, char *argv[]) {
                         if (r < 0)
                                 return r;
 
-                        arg_with_timer = true;
                         break;
 
                 OPTION_LONG("on-calendar", "SPEC", "Realtime timer"): {
@@ -576,7 +515,6 @@ static int parse_argv(int argc, char *argv[]) {
                         if (r < 0)
                                 return r;
 
-                        arg_with_timer = true;
                         break;
                 }
 
@@ -585,7 +523,6 @@ static int parse_argv(int argc, char *argv[]) {
                         if (r < 0)
                                 return r;
 
-                        arg_with_timer = true;
                         break;
 
                 OPTION_LONG("on-clock-change", NULL, "Run when the realtime clock jumps"):
@@ -593,34 +530,43 @@ static int parse_argv(int argc, char *argv[]) {
                         if (r < 0)
                                 return r;
 
-                        arg_with_timer = true;
                         break;
 
                 OPTION_LONG("timer-property", "NAME=VALUE", "Set timer unit property"):
                         if (strv_extend(&arg_timer_property, opts.arg) < 0)
                                 return log_oom();
 
-                        arg_with_timer = arg_with_timer ||
-                                STARTSWITH_SET(opts.arg,
-                                               "OnActiveSec=",
-                                               "OnBootSec=",
-                                               "OnStartupSec=",
-                                               "OnUnitActiveSec=",
-                                               "OnUnitInactiveSec=",
-                                               "OnCalendar=",
-                                               "OnClockChange=",
-                                               "OnTimezoneChange=");
                         break;
+
+                OPTION_COMMON_INTROSPECT_CLI:
+                        return introspect_cli(arg_json_format_flags);
                 }
 
         /* If we are talking to the per-user instance PolicyKit isn't going to help */
         if (arg_runtime_scope == RUNTIME_SCOPE_USER)
                 arg_ask_password = false;
 
-        with_trigger = !!arg_path_property || !!arg_socket_property || arg_with_timer;
+        size_t n_timer_triggers = 0, n_other_timer_properties = 0;
+        STRV_FOREACH(i, arg_timer_property)
+                if (STARTSWITH_SET(*i,
+                                   "OnActiveSec=",
+                                   "OnBootSec=",
+                                   "OnStartupSec=",
+                                   "OnUnitActiveSec=",
+                                   "OnUnitInactiveSec=",
+                                   "OnCalendar=",
+                                   "OnClockChange=",
+                                   "OnTimezoneChange="))
+                        n_timer_triggers++;
+                else
+                        n_other_timer_properties++;
+        if (n_other_timer_properties > 0 && n_timer_triggers == 0)
+                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "--timer-property= set without any timer trigger expression (i.e. On*= setting), refusing.");
+
+        with_trigger = arg_path_property || arg_socket_property || arg_timer_property;
 
         /* currently, only single trigger (path, socket, timer) unit can be created simultaneously */
-        if (!!arg_path_property + !!arg_socket_property + (int) arg_with_timer > 1)
+        if (!!arg_path_property + !!arg_socket_property + !!arg_timer_property > 1)
                 return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
                                        "Only single trigger (path, socket, timer) unit can be created.");
 
@@ -697,9 +643,9 @@ static int parse_argv(int argc, char *argv[]) {
                 return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
                                        "Scope execution is not supported on remote systems.");
 
-        if (arg_scope && (arg_remain_after_exit || arg_service_type))
+        if (arg_scope && (arg_remain_after_exit || arg_service_type || arg_ignore_failure))
                 return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
-                                       "--remain-after-exit and --service-type= are not supported in --scope mode.");
+                                       "--remain-after-exit, --service-type= and --ignore-failure are not supported in --scope mode.");
 
         if (arg_scope && arg_no_block)
                 return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
@@ -717,6 +663,10 @@ static int parse_argv(int argc, char *argv[]) {
                 if (arg_no_block)
                         return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
                                                "--pty/--pty-late/--pipe is not compatible with --no-block.");
+
+                if (arg_remain_after_exit)
+                        return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                               "--pty/--pty-late/--pipe is not compatible with --remain-after-exit.");
         }
 
         if (arg_stdio == ARG_STDIO_PTY && arg_pty_late && streq_ptr(arg_service_type, "oneshot"))
@@ -727,9 +677,23 @@ static int parse_argv(int argc, char *argv[]) {
                 return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
                                        "Path, socket or timer options are not supported in --scope mode.");
 
-        if (arg_timer_property && !arg_with_timer)
-                return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
-                                       "--timer-property= has no effect without any other timer options.");
+        if (sd_json_format_enabled(arg_json_format_flags)) {
+                if (arg_scope)
+                        return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                               "--json= is not supported in --scope mode.");
+
+                if (arg_stdio != ARG_STDIO_NONE)
+                        return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                               "--json= is not compatible with --pty/--pty-late/--pipe.");
+
+                if (arg_verbose)
+                        return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                               "--json= is not compatible with --verbose.");
+
+                if (with_trigger)
+                        return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                               "--json= is not compatible with path, socket or timer operations.");
+        }
 
         if (arg_wait) {
                 if (arg_no_block)
@@ -743,6 +707,10 @@ static int parse_argv(int argc, char *argv[]) {
                 if (arg_scope)
                         return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
                                                "--wait may not be combined with --scope.");
+
+                if (arg_remain_after_exit)
+                        return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                               "--wait may not be combined with --remain-after-exit.");
         }
 
         if (arg_scope && arg_root_directory)
@@ -786,11 +754,24 @@ static Glyph pty_window_glyph(void) {
         return GLYPH_YELLOW_CIRCLE;
 }
 
+COMMAND(
+        "run0\0",
+        "Elevate privileges interactively.",
+        .argspec = "COMMAND [ARGUMENTS…]\0",
+        .man_pages = "run0(1)\0",
+        .option_namespace = "run0",
+        .pager_flags = &arg_pager_flags,
+);
+
 static int parse_argv_sudo_mode(int argc, char *argv[]) {
         int r;
 
         /* If invoked as "run0" binary, let's expose a more sudo-like interface. We add various extensions
-         * though (but limit the extension to long options). */
+         * though (but limit the extension to long options).
+         *
+         * NB: Let's not go overboard with short options: we try to keep a modicum of compatibility with
+         * sudo's short switches, hence please do not introduce new short switches unless they have a roughly
+         * equivalent purpose on sudo. Use long options for everything private to run0. */
 
         assert(argc >= 0);
         assert(argv);
@@ -803,9 +784,9 @@ static int parse_argv_sudo_mode(int argc, char *argv[]) {
                 OPTION_NAMESPACE("run0"): {}
 
                 OPTION_COMMON_HELP:
-                        return help_sudo_mode();
+                        return command_print_help_name("run0");
 
-                OPTION('V', "version", NULL, "Show package version"):
+                OPTION_COMMON_VERSION_WITH_V:
                         return version();
 
                 OPTION_COMMON_NO_ASK_PASSWORD:
@@ -814,6 +795,10 @@ static int parse_argv_sudo_mode(int argc, char *argv[]) {
 
                 OPTION('n', "non-interactive", NULL, "Do not prompt for password"):
                         arg_ask_password = false;
+                        break;
+
+                OPTION_COMMON_NO_PAGER:
+                        arg_pager_flags |= PAGER_DISABLE;
                         break;
 
                 OPTION_LONG("machine", "CONTAINER", "Operate on local container"):
@@ -847,11 +832,11 @@ static int parse_argv_sudo_mode(int argc, char *argv[]) {
                         arg_slice_inherit = true;
                         break;
 
-                OPTION('k', "reset-timestamp", NULL, "Revoke temporary authorization"):
+                OPTION('k', "reset-timestamp", NULL, "Revoke temporary authorization in polkit"):
                         arg_reset_timestamp = true;
                         break;
 
-                OPTION('K', "remove-timestamp", NULL, "Revoke all temporary authorizations for this user session"):
+                OPTION('K', "remove-timestamp", NULL, "Revoke all temporary authorizations for this user session in polkit"):
                         arg_remove_timestamp = true;
                         break;
 
@@ -955,6 +940,9 @@ static int parse_argv_sudo_mode(int argc, char *argv[]) {
                         if (r < 0)
                                 return r;
                         break;
+
+                OPTION_COMMON_INTROSPECT_CLI:
+                        return introspect_cli(arg_json_format_flags);
                 }
 
         if (!arg_working_directory) {
@@ -2517,6 +2505,17 @@ static int start_transient_service(sd_bus *bus) {
         return EXIT_SUCCESS;
 }
 
+static int log_scope_group_setup_errno(int r, gid_t gid, const char *message) {
+        assert(r < 0);
+        assert(message);
+
+        if (!ERRNO_IS_PRIVILEGE(r) || gid != getgid())
+                return log_error_errno(r, "%s: %m", message);
+
+        log_debug_errno(r, "%s, ignoring: %m", message);
+        return 0;
+}
+
 static int start_transient_scope(sd_bus *bus) {
         _cleanup_(sd_bus_message_unrefp) sd_bus_message *reply = NULL;
         _cleanup_(bus_wait_for_jobs_freep) BusWaitForJobs *w = NULL;
@@ -2623,26 +2622,22 @@ static int start_transient_scope(sd_bus *bus) {
                         return log_error_errno(errno, "Failed to set nice level: %m");
         }
 
+        gid_t gid = GID_INVALID;
         if (arg_exec_group) {
-                gid_t gid;
-
                 r = get_group_creds(arg_exec_group, /* flags= */ 0, /* ret_name= */ NULL, &gid);
                 if (r < 0)
                         return log_error_errno(r, "Failed to resolve group '%s': %s",
                                                arg_exec_group, STRERROR_GROUP(r));
-
-                if (setresgid(gid, gid, gid) < 0)
-                        return log_error_errno(errno, "Failed to change GID to " GID_FMT ": %m", gid);
         }
 
+        uid_t uid = UID_INVALID;
         if (arg_exec_user) {
                 _cleanup_free_ char *user = NULL, *home = NULL, *shell = NULL;
-                uid_t uid;
-                gid_t gid;
+                gid_t user_gid;
 
                 r = get_user_creds(arg_exec_user,
                                    USER_CREDS_CLEAN|USER_CREDS_SUPPRESS_PLACEHOLDER|USER_CREDS_PREFER_NSS,
-                                   &user, &uid, &gid, &home, &shell);
+                                   &user, &uid, &user_gid, &home, &shell);
                 if (r < 0)
                         return log_error_errno(r, "Failed to resolve user '%s': %s",
                                                arg_exec_user, STRERROR_USER(r));
@@ -2669,13 +2664,32 @@ static int start_transient_scope(sd_bus *bus) {
                 if (r < 0)
                         return log_oom();
 
-                if (!arg_exec_group &&
-                    setresgid(gid, gid, gid) < 0)
-                        return log_error_errno(errno, "Failed to change GID to " GID_FMT ": %m", gid);
+                if (!gid_is_valid(gid))
+                        gid = user_gid;
 
-                if (setresuid(uid, uid, uid) < 0)
-                        return log_error_errno(errno, "Failed to change UID to " UID_FMT ": %m", uid);
+                r = initgroups_wrapper(arg_exec_user, gid);
+                if (r < 0) {
+                        r = log_scope_group_setup_errno(
+                                        r,
+                                        gid,
+                                        strjoina("Failed to initialize supplementary groups for user '", arg_exec_user, "'"));
+                        if (r < 0)
+                                return r;
+                }
+        } else if (gid_is_valid(gid)) {
+                r = maybe_setgroups(/* size= */ 0, /* list= */ NULL);
+                if (r < 0) {
+                        r = log_scope_group_setup_errno(r, gid, "Failed to drop supplementary groups");
+                        if (r < 0)
+                                return r;
+                }
         }
+
+        if (gid_is_valid(gid) && setresgid(gid, gid, gid) < 0)
+                return log_error_errno(errno, "Failed to change GID to " GID_FMT ": %m", gid);
+
+        if (uid_is_valid(uid) && setresuid(uid, uid, uid) < 0)
+                return log_error_errno(errno, "Failed to change UID to " UID_FMT ": %m", uid);
 
         if (arg_working_directory && chdir(arg_working_directory) < 0)
                 return log_error_errno(errno, "Failed to change directory to '%s': %m", arg_working_directory);
@@ -2808,12 +2822,16 @@ static int start_transient_trigger(sd_bus *bus, const char *suffix) {
         assert(bus);
         assert(suffix);
 
-        r = bus_wait_for_jobs_new(bus, &w);
-        if (r < 0)
-                return log_error_errno(r, "Could not watch jobs: %m");
+        if (!arg_no_block) {
+                r = bus_wait_for_jobs_new(bus, &w);
+                if (r < 0)
+                        return log_error_errno(r, "Could not watch jobs: %m");
+        }
 
         if (arg_unit) {
-                switch (unit_name_to_type(arg_unit)) {
+                UnitType t = unit_name_to_type(arg_unit);
+
+                switch (t) {
 
                 case UNIT_SERVICE:
                         service = strdup(arg_unit);
@@ -2825,7 +2843,14 @@ static int start_transient_trigger(sd_bus *bus, const char *suffix) {
                                 return log_error_errno(r, "Failed to change unit suffix: %m");
                         break;
 
+                case UNIT_PATH:
+                case UNIT_SOCKET:
                 case UNIT_TIMER:
+                        if (!streq(suffix + 1, unit_type_to_string(t)))
+                                return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                                       "Specified unit '%s' does not match requested %s trigger.",
+                                                       arg_unit, suffix + 1);
+
                         trigger = strdup(arg_unit);
                         if (!trigger)
                                 return log_oom();
@@ -2875,10 +2900,12 @@ static int start_transient_trigger(sd_bus *bus, const char *suffix) {
         if (r < 0)
                 return bus_log_parse_error(r);
 
-        r = bus_wait_for_jobs_one(w, object, arg_quiet ? 0 : BUS_WAIT_JOBS_LOG_ERROR,
-                                  arg_runtime_scope == RUNTIME_SCOPE_USER ? STRV_MAKE_CONST("--user") : NULL);
-        if (r < 0)
-                return r;
+        if (w) {
+                r = bus_wait_for_jobs_one(w, object, arg_quiet ? 0 : BUS_WAIT_JOBS_LOG_ERROR,
+                                          arg_runtime_scope == RUNTIME_SCOPE_USER ? STRV_MAKE_CONST("--user") : NULL);
+                if (r < 0)
+                        return r;
+        }
 
         if (!arg_quiet) {
                 log_info("Running %s as unit: %s", suffix + 1, trigger);
@@ -2908,282 +2935,6 @@ static bool shall_make_executable_absolute(void) {
                         return false;
 
         return true;
-}
-
-static int polkit_check_authorization(sd_bus *bus, PolkitFlags flags, char **ret_tmpauthz_id) {
-        _cleanup_(sd_bus_message_unrefp) sd_bus_message *m = NULL, *reply = NULL;
-        _cleanup_(sd_bus_error_free) sd_bus_error error = SD_BUS_ERROR_NULL;
-        pid_t pid;
-        _cleanup_close_ int pidfd = -EBADF;
-        _cleanup_free_ char *tmpauthz_id = NULL;
-        int is_authorized, is_challenge;
-        int r;
-
-        assert(bus);
-
-        r = sd_bus_message_new_method_call(bus, &m,
-                        "org.freedesktop.PolicyKit1",
-                        "/org/freedesktop/PolicyKit1/Authority",
-                        "org.freedesktop.PolicyKit1.Authority",
-                        "CheckAuthorization");
-        if (r < 0)
-                return bus_log_create_error(r);
-
-        pid = getpid_cached();
-
-        /* Polkit requires pidfd to honor temporary authorizations */
-        pidfd = pidfd_open(pid, 0);
-        if (pidfd < 0)
-                return log_debug_errno(errno, "pidfd_open failed: %m");
-
-        r = sd_bus_message_append(m, "(sa{sv})s", "unix-process", 4, "pid", "u", (uint32_t) pid,
-                        "start-time", "t", UINT64_C(0), "uid", "i", (uint32_t) geteuid(), "pidfd", "h", pidfd,
-                        "org.freedesktop.systemd1.manage-units");
-        if (r < 0)
-                return bus_log_create_error(r);
-
-        r = sd_bus_message_append(m, "a{ss}us", /* details = */ 0, (uint32_t) flags, /* cancel_id = */ NULL);
-        if (r < 0)
-                return bus_log_create_error(r);
-
-        r = sd_bus_call(bus, m, /* usec = */ 0, &error, &reply);
-        if (r < 0)
-                return log_error_errno(r, "Failed to check authorization: %s", bus_error_message(&error, r));
-
-        r = sd_bus_message_enter_container(reply, 'r', "bba{ss}");
-        if (r < 0)
-                return bus_log_parse_error(r);
-
-        r = sd_bus_message_read(reply, "bb", &is_authorized, &is_challenge);
-        if (r < 0)
-                return bus_log_parse_error(r);
-
-        r = sd_bus_message_enter_container(reply, 'a', "{ss}");
-        if (r < 0)
-                return bus_log_parse_error(r);
-
-        for (;;) {
-                const char *key, *value;
-                r = sd_bus_message_enter_container(reply, 'e', "ss");
-                if (r < 0)
-                        return bus_log_parse_error(r);
-                if (r == 0)
-                        break;
-
-                r = sd_bus_message_read(reply, "ss", &key, &value);
-                if (r < 0)
-                        return bus_log_parse_error(r);
-
-                if (streq(key, "polkit.temporary_authorization_id")) {
-                        r = free_and_strdup(&tmpauthz_id, value);
-                        if (r < 0)
-                                return log_oom();
-                }
-
-                r = sd_bus_message_exit_container(reply);
-                if (r < 0)
-                        return bus_log_parse_error(r);
-        }
-
-        r = sd_bus_message_exit_container(reply); /* a{ss} */
-        if (r < 0)
-                return bus_log_parse_error(r);
-
-        r = sd_bus_message_exit_container(reply); /* (bba{ss}) */
-        if (r < 0)
-                return bus_log_parse_error(r);
-
-        if (ret_tmpauthz_id && is_authorized)
-                *ret_tmpauthz_id = TAKE_PTR(tmpauthz_id);
-
-        return is_authorized;
-}
-
-static int revoke_temporary_authorization_by_id(sd_bus *bus, const char *id) {
-        _cleanup_(sd_bus_message_unrefp) sd_bus_message *m = NULL;
-        _cleanup_(sd_bus_error_free) sd_bus_error error = SD_BUS_ERROR_NULL;
-        int r;
-
-        assert(bus);
-        assert(id);
-
-        r = sd_bus_message_new_method_call(bus, &m,
-                        "org.freedesktop.PolicyKit1",
-                        "/org/freedesktop/PolicyKit1/Authority",
-                        "org.freedesktop.PolicyKit1.Authority",
-                        "RevokeTemporaryAuthorizationById");
-        if (r < 0)
-                return bus_log_create_error(r);
-
-        r = sd_bus_message_append(m, "s", id);
-        if (r < 0)
-                return bus_log_create_error(r);
-
-        log_debug("Revoking temporary authorization %s", id);
-        r = sd_bus_call(bus, m, /* usec = */ 0, &error, /* ret_reply= */ NULL);
-        if (r < 0)
-                return log_error_errno(r, "Failed to revoke temporary authorization %s: %s",
-                                id, bus_error_message(&error, r));
-
-        return 0;
-}
-
-static int check_polkit_subject_for_uid(sd_bus_message *m) {
-        const char *kind = NULL;
-        uid_t uid = UID_INVALID;
-        int r;
-
-        r = sd_bus_message_enter_container(m, 'r', "sa{sv}");
-        if (r < 0)
-                return bus_log_parse_error(r);
-
-        r = sd_bus_message_read(m, "s", &kind);
-        if (r < 0)
-                return bus_log_parse_error(r);
-
-        r = sd_bus_message_enter_container(m, 'a', "{sv}");
-        if (r < 0)
-                return bus_log_parse_error(r);
-
-        for (;;) {
-                const char *key, *contents;
-                char type;
-
-                r = sd_bus_message_enter_container(m, 'e', "sv");
-                if (r < 0)
-                        return bus_log_parse_error(r);
-                if (r == 0)
-                        break;
-
-                r = sd_bus_message_read(m, "s", &key);
-                if (r < 0)
-                        return bus_log_parse_error(r);
-
-                r = sd_bus_message_peek_type(m, &type, &contents);
-                if (r < 0)
-                        return bus_log_parse_error(r);
-
-                if (streq(key, "pid")) {
-                        if (*contents != SD_BUS_TYPE_UINT32)
-                                return bus_log_parse_error(SYNTHETIC_ERRNO(EINVAL));
-                        r = sd_bus_message_skip(m, "v");
-                        if (r < 0)
-                                return bus_log_parse_error(r);
-                } else if (streq(key, "start-time")) {
-                        if (*contents != SD_BUS_TYPE_UINT64)
-                                return bus_log_parse_error(SYNTHETIC_ERRNO(EINVAL));
-                        r = sd_bus_message_skip(m, "v");
-                        if (r < 0)
-                                return bus_log_parse_error(r);
-                } else if (streq(key, "uid")) {
-                        if (*contents != SD_BUS_TYPE_INT32)
-                                return bus_log_parse_error(SYNTHETIC_ERRNO(EINVAL));
-                        r = sd_bus_message_read(m, "v", "i", &uid);
-                        if (r < 0)
-                                return bus_log_parse_error(r);
-                } else if (streq(key, "pidfd")) {
-                        if (*contents != SD_BUS_TYPE_UNIX_FD)
-                                return bus_log_parse_error(SYNTHETIC_ERRNO(EINVAL));
-                        r = sd_bus_message_skip(m, "v");
-                        if (r < 0)
-                                return bus_log_parse_error(r);
-                } else {
-                        r = sd_bus_message_skip(m, "v");
-                        if (r < 0)
-                                return bus_log_parse_error(r);
-                }
-
-                r = sd_bus_message_exit_container(m);
-                if (r < 0)
-                        return bus_log_parse_error(r);
-        }
-
-        r = sd_bus_message_exit_container(m); /* a(sa{sv}) */
-        if (r < 0)
-                return bus_log_parse_error(r);
-
-        r = sd_bus_message_exit_container(m); /* (a(sa{sv})) */
-        if (r < 0)
-                return bus_log_parse_error(r);
-
-        return uid_is_valid(uid) && uid == geteuid();
-}
-
-static int revoke_temporary_authorizations(sd_bus *bus) {
-        _cleanup_(sd_bus_message_unrefp) sd_bus_message *m = NULL, *reply = NULL;
-        _cleanup_(sd_bus_error_free) sd_bus_error error = SD_BUS_ERROR_NULL;
-        const char *session_id = NULL;
-        int r;
-
-        assert(bus);
-
-        session_id = getenv("XDG_SESSION_ID");
-        if (!session_id)
-                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "XDG_SESSION_ID is not set");
-
-        r = sd_bus_message_new_method_call(bus, &m,
-                        "org.freedesktop.PolicyKit1",
-                        "/org/freedesktop/PolicyKit1/Authority",
-                        "org.freedesktop.PolicyKit1.Authority",
-                        "EnumerateTemporaryAuthorizations");
-        if (r < 0)
-                return bus_log_create_error(r);
-
-        r = sd_bus_message_append(m, "(sa{sv})", "unix-session", 1, "session-id", "s", session_id);
-        if (r < 0)
-                return bus_log_create_error(r);
-
-        r = sd_bus_call(bus, m, /* usec = */ 0, &error, &reply);
-        if (r < 0)
-                return log_error_errno(r, "Failed to enumerate temporary authorizations: %s",
-                                bus_error_message(&error, r));
-
-        r = sd_bus_message_enter_container(reply, 'a', "(ss(sa{sv})tt)");
-        if (r < 0)
-                return bus_log_parse_error(r);
-
-        for (;;) {
-                const char *id = NULL, *action_id = NULL;
-
-                r = sd_bus_message_enter_container(reply, 'r', "ss(sa{sv})tt");
-                if (r < 0)
-                        return bus_log_parse_error(r);
-                if (r == 0)
-                        break;
-
-                r = sd_bus_message_read(reply, "ss", &id, &action_id);
-                if (r < 0)
-                        return bus_log_parse_error(r);
-
-                if (streq(action_id, "org.freedesktop.systemd1.manage-units")) {
-                        r = check_polkit_subject_for_uid(reply);
-                        if (r < 0)
-                                return r;
-                        if (r > 0) {
-                                r = revoke_temporary_authorization_by_id(bus, id);
-                                if (r < 0)
-                                        return r;
-                        }
-                } else {
-                        r = sd_bus_message_skip(reply, "(sa{sv})");
-                        if (r < 0)
-                                return bus_log_parse_error(r);
-                }
-
-                r = sd_bus_message_skip(reply, "tt");
-                if (r < 0)
-                        return bus_log_parse_error(r);
-
-                r = sd_bus_message_exit_container(reply);
-                if (r < 0)
-                        return bus_log_parse_error(r);
-        }
-
-        r = sd_bus_message_exit_container(reply);
-        if (r < 0)
-                return bus_log_parse_error(r);
-
-        return 0;
 }
 
 static int polkit_validate(sd_bus *bus) {
@@ -3268,7 +3019,7 @@ static int run(int argc, char* argv[]) {
                 return r;
 
         if (arg_remove_timestamp) {
-                r = revoke_temporary_authorizations(bus);
+                r = polkit_revoke_temporary_authorizations(bus);
                 if (r < 0)
                         return r;
                 if (arg_validate)
@@ -3282,7 +3033,7 @@ static int run(int argc, char* argv[]) {
                 if (r < 0)
                         return r;
                 if (r > 0 && tmpauthz_id) {
-                        r = revoke_temporary_authorization_by_id(bus, tmpauthz_id);
+                        r = polkit_revoke_temporary_authorization_by_id(bus, tmpauthz_id);
                         if (r < 0)
                                 return r;
                 }
@@ -3300,7 +3051,7 @@ static int run(int argc, char* argv[]) {
                 return start_transient_trigger(bus, ".path");
         if (arg_socket_property)
                 return start_transient_trigger(bus, ".socket");
-        if (arg_with_timer)
+        if (arg_timer_property)
                 return start_transient_trigger(bus, ".timer");
         return start_transient_service(bus);
 }

@@ -453,7 +453,7 @@ static int begin_copy_file(
         CLEANUP_TMPFILE_AT(target_dir_fd, t);
 
         if (source_fd >= 0) {
-                r = copy_bytes(source_fd, write_fd, UINT64_MAX, COPY_REFLINK|COPY_SEEK0_SOURCE);
+                r = copy_bytes(source_fd, write_fd, UINT64_MAX, COPY_SEEK0_SOURCE);
                 if (r < 0)
                         return log_error_errno(r, "Failed to copy data into '%s': %m", filename);
 
@@ -859,7 +859,14 @@ static int run_link_now(LinkContext *c) {
 
         for (unsigned p = 0; p < UNIFIED_PROFILES_MAX; p++) {
                 _cleanup_free_ char *osrelease = NULL, *profile = NULL;
-                r = pe_find_uki_sections(c->kernel_fd, j, p, &osrelease, &profile, /* ret_cmdline= */ NULL);
+                r = pe_find_uki_sections(
+                                c->kernel_fd,
+                                j,
+                                p,
+                                &osrelease,
+                                &profile,
+                                /* ret_cmdline= */ NULL,
+                                /* ret_uname= */ NULL);
                 if (r < 0)
                         return r;
                 if (r == 0) /* this profile does not exist, we are done */
@@ -1492,7 +1499,7 @@ static int vl_link_prepare(sd_varlink *link, LinkParameters *p) {
         if (p->context.entry_title && !efi_loader_entry_title_valid(p->context.entry_title))
                 return sd_varlink_error_invalid_parameter_name(link, "entryTitle");
 
-        if (p->context.entry_version && !version_is_valid_versionspec(p->context.entry_version))
+        if (p->context.entry_version && !version_is_valid(p->context.entry_version, /* flags= */ 0))
                 return sd_varlink_error_invalid_parameter_name(link, "entryVersion");
 
         if (p->context.entry_commit != 0 && !entry_commit_valid(p->context.entry_commit))

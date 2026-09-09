@@ -1699,6 +1699,35 @@ class NetworkctlTests(unittest.TestCase, Utilities):
         networkctl_reload()
         self.wait_operstate('test1', 'degraded')
 
+    def test_reload_no_reconfigure(self):
+        copy_network_unit('12-dummy.netdev', '25-address-static.network', copy_dropins=False)
+        start_networkd()
+        self.wait_online('dummy98:routable')
+
+        output = check_output('ip -4 address show dev dummy98')
+        print(output)
+        self.assertIn('inet 10.1.2.3/16 brd 10.1.255.255 scope global dummy98', output)
+
+        with open(
+            os.path.join(network_unit_dir, '25-address-static.network'), mode='w', encoding='utf-8'
+        ) as f:
+            f.write('[Match]\nName=dummy98\n\n[Network]\nIPv6AcceptRA=no\nAddress=10.99.0.1/24\n')
+
+        networkctl('reload', '--no-reconfigure')
+
+        output = check_output('ip -4 address show dev dummy98')
+        print(output)
+        self.assertIn('inet 10.1.2.3/16 brd 10.1.255.255 scope global dummy98', output)
+        self.assertNotIn('inet 10.99.0.1/24', output)
+
+        networkctl_reconfigure('dummy98')
+        self.wait_online('dummy98:routable')
+
+        output = check_output('ip -4 address show dev dummy98')
+        print(output)
+        self.assertIn('inet 10.99.0.1/24 brd 10.99.0.255 scope global dummy98', output)
+        self.assertNotIn('inet 10.1.2.3/16', output)
+
     def test_glob(self):
         copy_network_unit('11-dummy.netdev', '11-dummy.network')
         start_networkd()
@@ -5341,8 +5370,60 @@ class NetworkdNetworkTests(unittest.TestCase, Utilities):
 
         output = check_output('ip neighbor show proxy dev dummy98')
         print(output)
-        for i in range(1, 5):
+        for i in range(1, 6):
             self.assertRegex(output, f'2607:5300:203:5215:{i}::1 *proxy')
+
+        # When a proxy NDP address is specified, IPv6ProxyNDP=yes is implied.
+        self.check_ipv6_sysctl_attr('dummy98', 'proxy_ndp', '1')
+
+        with open(
+            os.path.join(network_unit_dir, '25-ipv6-proxy-ndp.network'), mode='a', encoding='utf-8'
+        ) as f:
+            f.write('[Network]\nIPv6ProxyNDP=no\n')
+
+        stop_networkd()
+        remove_link('dummy98')
+        start_networkd()
+        self.wait_online('dummy98:routable')
+
+        # If IPv6ProxyNDP= is disabled, proxy NDP addresses are ignored.
+        output = check_output('ip neighbor show proxy dev dummy98')
+        print(output)
+        for i in range(1, 6):
+            self.assertNotRegex(output, f'2607:5300:203:5215:{i}::1 *proxy')
+
+        self.check_ipv6_sysctl_attr('dummy98', 'proxy_ndp', '0')
+
+    def test_ipv4_proxy_arp(self):
+        copy_network_unit('25-ipv4-proxy-arp.network', '12-dummy.netdev')
+        start_networkd()
+
+        self.wait_online('dummy98:routable')
+
+        output = check_output('ip -4 neighbor show proxy dev dummy98')
+        print(output)
+        for i in range(1, 6):
+            self.assertRegex(output, f'192.0.2.{i} *proxy')
+
+        # Even if a proxy ARP address is specified, IPv4ProxyARP=yes is NOT implied.
+        self.check_ipv4_sysctl_attr('dummy98', 'proxy_arp', '0')
+
+        stop_networkd()
+        remove_link('dummy98')
+        remove_network_unit('25-ipv4-proxy-arp.network')
+        copy_network_unit('25-ipv4-proxy-arp-disabled.network', '12-dummy.netdev')
+        start_networkd()
+        self.wait_online('dummy98:routable')
+
+        # Even if IPv4ProxyARP= is disabled, proxy ARP addresses can be configured.
+        output = check_output('ip -4 neighbor show proxy dev dummy98')
+        print(output)
+        for i in range(1, 6):
+            self.assertNotRegex(output, f'192.0.2.{i} *proxy')
+        for i in range(1, 3):
+            self.assertRegex(output, f'192.0.3.{i} *proxy')
+
+        self.check_ipv4_sysctl_attr('dummy98', 'proxy_arp', '0')
 
     def test_ipv6_neigh_retrans_time(self):
         link = 'test25'
@@ -11083,21 +11164,21 @@ class NetworkdSysctlTest(unittest.TestCase, Utilities):
         call('sysctl -w net.ipv6.conf.dummy98.accept_ra=1')
         call('sysctl -w net.ipv6.conf.dummy98.mtu=1360')
         call('sysctl -w net.ipv4.conf.dummy98.promote_secondaries=0')
-        call('sysctl -w net.ipv6.conf.dummy98.proxy_ndp=1')
 
         # And unmanaged ones
         call('sysctl -w net.ipv6.conf.dummy98.hop_limit=4')
         call('sysctl -w net.ipv6.conf.dummy98.max_addresses=10')
+        call('sysctl -w net.ipv6.conf.dummy98.proxy_ndp=1')
 
         log = read_networkd_log()
         # fmt: off
         self.assertRegex(log, r"Foreign process 'sysctl\[\d+\]' changed sysctl '/proc/sys/net/ipv6/conf/dummy98/accept_ra' from '0' to '1', conflicting with our setting to '0'")
         self.assertRegex(log, r"Foreign process 'sysctl\[\d+\]' changed sysctl '/proc/sys/net/ipv6/conf/dummy98/mtu' from '1550' to '1360', conflicting with our setting to '1550'")
         self.assertRegex(log, r"Foreign process 'sysctl\[\d+\]' changed sysctl '/proc/sys/net/ipv4/conf/dummy98/promote_secondaries' from '1' to '0', conflicting with our setting to '1'")
-        self.assertRegex(log, r"Foreign process 'sysctl\[\d+\]' changed sysctl '/proc/sys/net/ipv6/conf/dummy98/proxy_ndp' from '0' to '1', conflicting with our setting to '0'")
         # fmt: on
         self.assertNotIn("changed sysctl '/proc/sys/net/ipv6/conf/dummy98/hop_limit'", log)
         self.assertNotIn("changed sysctl '/proc/sys/net/ipv6/conf/dummy98/max_addresses'", log)
+        self.assertNotIn("changed sysctl '/proc/sys/net/ipv6/conf/dummy98/proxy_ndp'", log)
         self.assertNotIn('Sysctl monitor BPF returned error', log)
 
 

@@ -20,6 +20,7 @@
 #include "creds-util.h"
 #include "curl-util.h"
 #include "device-private.h"
+#include "dlopen-note.h"
 #include "dns-rr.h"
 #include "errno-util.h"
 #include "escape.h"
@@ -28,10 +29,8 @@
 #include "fd-util.h"
 #include "fileio.h"
 #include "format-ifname.h"
-#include "format-table.h"
 #include "hash-funcs.h"
 #include "hashmap.h"
-#include "help-util.h"
 #include "imds-util.h"
 #include "in-addr-util.h"
 #include "io-util.h"
@@ -40,7 +39,6 @@
 #include "log.h"
 #include "main-func.h"
 #include "netlink-util.h"
-#include "options.h"
 #include "parse-argument.h"
 #include "parse-util.h"
 #include "path-util.h"
@@ -53,6 +51,7 @@
 #include "utf8.h"
 #include "varlink-io.systemd.InstanceMetadata.h"
 #include "varlink-util.h"
+#include "verbs.h"
 #include "web-util.h"
 #include "xattr-util.h"
 
@@ -126,8 +125,7 @@ static struct in6_addr arg_address_ipv6 = {};
 static char *arg_well_known_key[_IMDS_WELL_KNOWN_MAX] = {};
 
 static void imds_well_known_key_free(typeof(arg_well_known_key) *array) {
-        FOREACH_ARRAY(i, *array, _IMDS_WELL_KNOWN_MAX)
-                free(*i);
+        free_many_charp(*array, _IMDS_WELL_KNOWN_MAX);
 }
 
 STATIC_DESTRUCTOR_REGISTER(arg_ifname, freep);
@@ -140,6 +138,13 @@ STATIC_DESTRUCTOR_REGISTER(arg_data_url_suffix, freep);
 STATIC_DESTRUCTOR_REGISTER(arg_token_header_name, freep);
 STATIC_DESTRUCTOR_REGISTER(arg_extra_header, strv_freep);
 STATIC_DESTRUCTOR_REGISTER(arg_well_known_key, imds_well_known_key_free);
+
+COMMAND(
+        "systemd-imdsd\0",
+        "Low-level IMDS data acquisition.",
+        .argspec = "KEY\0",
+        .man_pages = "systemd-imdsd@.service(8)\0",
+);
 
 typedef struct Context Context;
 
@@ -2192,37 +2197,6 @@ static int vl_server(void) {
         return 0;
 }
 
-static int help(void) {
-        _cleanup_(table_unrefp) Table *options = NULL, *endpoint_options = NULL;
-        int r;
-
-        r = option_parser_get_help_table(&options);
-        if (r < 0)
-                return r;
-
-        r = option_parser_get_help_table_group("Manual Endpoint Configuration", &endpoint_options);
-        if (r < 0)
-                return r;
-
-        (void) table_sync_column_widths(0, options, endpoint_options);
-
-        help_cmdline("[OPTIONS...] KEY");
-        help_abstract("Low-level IMDS data acquisition.");
-
-        help_section("Options");
-        r = table_print_or_warn(options);
-        if (r < 0)
-                return r;
-
-        help_section("Manual Endpoint Configuration");
-        r = table_print_or_warn(endpoint_options);
-        if (r < 0)
-                return r;
-
-        help_man_page_reference("systemd-imdsd@.service", "8");
-        return 0;
-}
-
 static bool http_header_name_valid(const char *a) {
         return a && ascii_is_valid(a) && !string_has_cc(a, /* ok= */ NULL) && !strchr(a, ':');
 }
@@ -2239,7 +2213,7 @@ static int parse_argv(int argc, char *argv[]) {
                 switch (c) {
 
                 OPTION_COMMON_HELP:
-                        return help();
+                        return command_print_help();
 
                 OPTION_COMMON_VERSION:
                         return version();
@@ -2484,6 +2458,9 @@ static int parse_argv(int argc, char *argv[]) {
                                 return r;
                         break;
                 }
+
+                OPTION_COMMON_INTROSPECT_CLI:
+                        return introspect_cli(SD_JSON_FORMAT_OFF);
                 }
 
         if (arg_vendor || arg_token_url || arg_refresh_header_name || arg_data_url || arg_data_url_suffix || arg_token_header_name || arg_extra_header)
@@ -3047,13 +3024,15 @@ static int parse_proc_cmdline_item(const char *key, const char *value, void *dat
 static int run(int argc, char* argv[]) {
         int r;
 
+        LIBCURL_NOTE(required);
+
         log_setup();
 
         r = parse_argv(argc, argv);
         if (r <= 0)
                 return r;
 
-        r = DLOPEN_CURL(LOG_DEBUG, required);
+        r = dlopen_curl(LOG_DEBUG);
         if (r < 0)
                 return r;
 

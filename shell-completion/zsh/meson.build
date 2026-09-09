@@ -45,9 +45,11 @@ foreach item : [
         ['_systemd-path',             ''],
         ['_systemd-run',              ''],
         ['_systemd-sysinstall',       'ENABLE_SYSINSTALL'],
+        ['_systemd-sysupdate',        'ENABLE_SYSUPDATE'],
         ['_systemd-tmpfiles',         'ENABLE_TMPFILES'],
         ['_timedatectl',              'ENABLE_TIMEDATED'],
         ['_udevadm',                  ''],
+        ['_updatectl',                'ENABLE_SYSUPDATED'],
         ['_userdbctl',                ''],
         ['_varlinkctl',               ''],
 ]

@@ -89,6 +89,48 @@ TEST(ecc_pkey_curve_x_y) {
         assert_se(memcmp_nn(y, y_len, y2, y2_size) == 0);
 }
 
+TEST(ecc_pkey_curve_x_y_leading_zero) {
+        /* Regression test: a P-384 public key whose x-coordinate has a most significant zero
+         * byte. BN_bn2bin() would strip it and return a 47-byte coordinate; ecc_pkey_to_curve_x_y()
+         * must zero-pad both coordinates to the 48-byte P-384 field width. */
+        DEFINE_HEX_PTR(key, "2d2d2d2d2d424547494e205055424c4943204b45592d2d2d2d2d0a4d485977454159484b6f5a497a6a3043415159464b34454541434944596741454147625a626d4a32534231424a4879633178674f7a4a646e67586767566254700a5a76515070516b54564779387362777677734872635a4871307a5a76782f316c4336787a5a64615648433147303835786c636c4a7770435a57685571576866730a2f6a70337a436d6e446a49754a79505735435148494930652b575a47706263490a2d2d2d2d2d454e44205055424c4943204b45592d2d2d2d2d0a");
+        _cleanup_(EVP_PKEY_freep) EVP_PKEY *pkey = NULL;
+        ASSERT_OK(openssl_pubkey_from_pem(key, key_len, &pkey));
+
+        _cleanup_free_ void *x = NULL, *y = NULL;
+        size_t x_size, y_size;
+        int curve_id;
+        ASSERT_OK(ecc_pkey_to_curve_x_y(pkey, &curve_id, &x, &x_size, &y, &y_size));
+        ASSERT_EQ(curve_id, NID_secp384r1);
+
+        DEFINE_HEX_PTR(expected_x, "0066d96e6276481d41247c9cd7180ecc976781782055b4e966f40fa50913546cbcb1bc2fc2c1eb7191ead3366fc7fd65");
+        ASSERT_EQ(memcmp_nn(x, x_size, expected_x, expected_x_len), 0);
+
+        DEFINE_HEX_PTR(expected_y, "0bac7365d6951c2d46d3ce7195c949c290995a152a5a17ecfe3a77cc29a70e322e2723d6e42407208d1ef96646a5b708");
+        ASSERT_EQ(memcmp_nn(y, y_size, expected_y, expected_y_len), 0);
+}
+
+TEST(ecc_pkey_curve_x_y_p521) {
+        /* P-521's field width is not a whole number of bytes: DIV_ROUND_UP(521, 8) is 66, and only
+         * the low bit of the leading byte can ever be set, so roughly half of all coordinates
+         * encode minimally in 65 bytes. This is a pinned key whose x-coordinate is one of them. */
+        DEFINE_HEX_PTR(key, "2d2d2d2d2d424547494e205055424c4943204b45592d2d2d2d2d0a4d4947624d42414742797147534d343941674547425375424241416a41344747414151416f527a475046566f7935437a474b6c385359757848345764365375470a4c66674135624d2b527258474c31794273584b443434366f4c30767530664e71717a6e667a456d3959395447634a394c385771784a3774325665514255466e460a6b6a2f49324137637a4843625a6b6b795753796656706e39666b70414542473166354c53464d7244667965664953324573353035334a366441434462796458550a435958353948514f4c443044794f3851734d6f3d0a2d2d2d2d2d454e44205055424c4943204b45592d2d2d2d2d0a");
+        _cleanup_(EVP_PKEY_freep) EVP_PKEY *pkey = NULL;
+        ASSERT_OK(openssl_pubkey_from_pem(key, key_len, &pkey));
+
+        _cleanup_free_ void *x = NULL, *y = NULL;
+        size_t x_size, y_size;
+        int curve_id;
+        ASSERT_OK(ecc_pkey_to_curve_x_y(pkey, &curve_id, &x, &x_size, &y, &y_size));
+        ASSERT_EQ(curve_id, NID_secp521r1);
+
+        DEFINE_HEX_PTR(expected_x, "00a11cc63c5568cb90b318a97c498bb11f859de92b862df800e5b33e46b5c62f5c81b17283e38ea82f4beed1f36aab39dfcc49bd63d4c6709f4bf16ab127bb7655e4");
+        ASSERT_EQ(memcmp_nn(x, x_size, expected_x, expected_x_len), 0);
+
+        DEFINE_HEX_PTR(expected_y, "015059c5923fc8d80edccc709b664932592c9f5699fd7e4a401011b57f92d214cac37f279f212d84b39d39dc9e9d0020dbc9d5d40985f9f4740e2c3d03c8ef10b0ca");
+        ASSERT_EQ(memcmp_nn(y, y_size, expected_y, expected_y_len), 0);
+}
+
 TEST(invalid) {
         _cleanup_(EVP_PKEY_freep) EVP_PKEY *pkey = NULL;
 
@@ -340,6 +382,106 @@ TEST(kdf_ss_derive) {
                 "b75e3b65d1bb845dee581c7e14cfebc6e882946e90273b77ebe289faaf7de248",
                 "ed25a0043d6c1eb28296da1f9ab138dafee18f4c937bfc43601d4ee6e7634199",
                 "30EB1A1E9DEA7DE4DDB8F3FDF50A01E30581D606C1228D98AFF691DF743AC2EE9D99EFD2AE1946C079AA18C9524877FA65D5065F0DAED058AB3416AF80EB2B73");
+}
+
+static void check_hkdf_derive(
+                const char *digest,
+                const char *hex_key,
+                const char *hex_salt,
+                const char *hex_info,
+                const char *hex_expected) {
+
+        DEFINE_HEX_PTR(key, hex_key);
+        DEFINE_HEX_PTR(salt, hex_salt);
+        DEFINE_HEX_PTR(info, hex_info);
+        DEFINE_HEX_PTR(expected, hex_expected);
+
+        _cleanup_(iovec_done) struct iovec derived = {};
+        assert_se(kdf_hkdf_derive(
+                        digest,
+                        &IOVEC_MAKE(key, key_len),
+                        &IOVEC_MAKE(salt, salt_len),
+                        &IOVEC_MAKE(info, info_len),
+                        expected_len,
+                        &derived) >= 0);
+        assert_se(memcmp_nn(derived.iov_base, derived.iov_len, expected, expected_len) == 0);
+}
+
+TEST(kdf_hkdf_derive) {
+        /* RFC 5869, Appendix A.1: basic HKDF-SHA256 test vector. */
+        check_hkdf_derive(
+                "SHA256",
+                "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+                "000102030405060708090a0b0c",
+                "f0f1f2f3f4f5f6f7f8f9",
+                "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865");
+
+        /* fscrypt v2 master-key identifier derivation. The Linux kernel uses standard HKDF-SHA512
+         * (RFC 5869) with empty salt (i.e. HashLen=64 zero bytes per RFC 5869 §2.2), but splits the
+         * info string for code organisation: fs/crypto/hkdf.c's fscrypt_hkdf_expand() hard-codes an
+         * 8-byte "fscrypt\0" prefix, then appends a context byte and the per-caller info argument
+         * before HKDF-Expand. For the key identifier the caller passes context=0x01
+         * (HKDF_CONTEXT_KEY_IDENTIFIER) with empty info, so the effective standard-HKDF info is the
+         * 9-byte string "fscrypt\0\x01". The vectors below assert that against representative IKM
+         * sizes (all-zeros, full 64-byte master key, AES-256 sized, and an arbitrary 64-byte
+         * payload). */
+        const char *fscrypt_info_hex = "667363727970740001";
+
+        check_hkdf_derive(
+                "SHA512",
+                "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                /* hex_salt= */ NULL,
+                fscrypt_info_hex,
+                "69d7f347a3ca7bfa3e0c1d84e476d050");
+
+        check_hkdf_derive(
+                "SHA512",
+                "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+                /* hex_salt= */ NULL,
+                fscrypt_info_hex,
+                "8699c2c53707405da5aba5ae4d8583c0");
+
+        check_hkdf_derive(
+                "SHA512",
+                "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+                /* hex_salt= */ NULL,
+                fscrypt_info_hex,
+                "37d7d76a59400083289c185526730d34");
+
+        check_hkdf_derive(
+                "SHA512",
+                "73797374656d642d686f6d6564207632207465737420766563746f72206b65790000000000000000000000000000000000000000000000000000000000000000",
+                /* hex_salt= */ NULL,
+                fscrypt_info_hex,
+                "ab8550968fca25b08222de0ffb7b2986");
+
+        /* Exercise the salt=NULL path in kdf_hkdf_derive directly. DEFINE_HEX_PTR(NULL) allocates a
+         * 1-byte buffer of size 0, so check_hkdf_derive() above feeds the function an
+         * iovec_is_valid()-but-not-iovec_is_set() iovec. Passing salt=NULL outright takes the other
+         * branch. Per RFC 5869 §2.2 an absent salt is identical to HashLen zero bytes, which is also
+         * what OpenSSL substitutes for an empty-octet-string salt, so the derived output must match
+         * byte-for-byte against the third vector above. */
+        {
+                static const uint8_t ikm[] = {
+                        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+                        0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+                        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+                        0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+                };
+                static const uint8_t info[] = {
+                        'f', 's', 'c', 'r', 'y', 'p', 't', 0x00, 0x01,
+                };
+                DEFINE_HEX_PTR(expected, "37d7d76a59400083289c185526730d34");
+                _cleanup_(iovec_done) struct iovec derived = {};
+
+                assert_se(kdf_hkdf_derive(
+                                "SHA512",
+                                &IOVEC_MAKE((void*) ikm, sizeof(ikm)),
+                                /* salt= */ NULL,
+                                &IOVEC_MAKE((void*) info, sizeof(info)),
+                                expected_len, &derived) >= 0);
+                assert_se(memcmp_nn(derived.iov_base, derived.iov_len, expected, expected_len) == 0);
+        }
 }
 
 static void check_cipher(

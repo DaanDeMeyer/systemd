@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 
 #include "sd-bus.h"
+#include "sd-json.h"
 
 #include "alloc-util.h"
 #include "ansi-color.h"
@@ -16,10 +17,8 @@
 #include "format-table.h"
 #include "fs-util.h"
 #include "glyph-util.h"
-#include "help-util.h"
 #include "install.h"
 #include "main-func.h"
-#include "options.h"
 #include "os-util.h"
 #include "pager.h"
 #include "parse-argument.h"
@@ -51,6 +50,13 @@ static bool arg_clean = false;
 static RuntimeScope arg_runtime_scope = RUNTIME_SCOPE_SYSTEM;
 
 STATIC_DESTRUCTOR_REGISTER(arg_extension_images, strv_freep);
+
+COMMAND(
+        "portablectl\0",
+        "Attach or detach portable services in the local system.",
+        .man_pages = "portablectl(1)\0",
+        .pager_flags = &arg_pager_flags,
+);
 
 static bool is_portable_managed(const char *unit) {
         return ENDSWITH_SET(unit, ".service", ".target", ".socket", ".path", ".timer");
@@ -195,6 +201,9 @@ static int determine_matches(const char *image, char **l, bool allow_any, char *
         _cleanup_strv_free_ char **k = NULL;
         int r;
 
+        assert(image);
+        assert(ret);
+
         /* Determine the matches to apply. If the list is empty we derive the match from the image name. If
          * the list contains exactly the "-" we return a wildcard list (which is the empty list), but only if
          * this is expressly permitted. */
@@ -265,7 +274,7 @@ static int maybe_reload(sd_bus **bus) {
 }
 
 VERB_DEFAULT_NOARG(verb_list_images, "list",
-     "List available portable service images (default)");
+     "List available portable service images");
 static int verb_list_images(int argc, char *argv[], uintptr_t _data, void *userdata) {
         _cleanup_(sd_bus_error_free) sd_bus_error error = SD_BUS_ERROR_NULL;
         _cleanup_(sd_bus_message_unrefp) sd_bus_message *reply = NULL;
@@ -465,7 +474,7 @@ static bool image_metadata_error_is_no_match(const sd_bus_error *error) {
         return sd_bus_error_has_name(error, BUS_ERROR_NO_MATCHING_UNIT_FILES);
 }
 
-VERB(verb_inspect_image, "inspect", "NAME|PATH [PREFIX…]", 2, VERB_ANY, 0,
+VERB(verb_inspect_image, "inspect", "NAME|PATH [PREFIX…]\0", 2, VERB_ANY, 0,
      "Show details of specified portable service image");
 static int verb_inspect_image(int argc, char *argv[], uintptr_t _data, void *userdata) {
         _cleanup_(sd_bus_message_unrefp) sd_bus_message *m = NULL;
@@ -556,7 +565,7 @@ static int verb_inspect_image(int argc, char *argv[], uintptr_t _data, void *use
                        strna(pretty_os));
         }
 
-        if (!strv_isempty(arg_extension_images)) {
+        if (!strv_isempty(arg_extension_images) || arg_force) {
                 /* If we specified any extensions, we'll first get back exactly the paths (and
                  * extension-release content) for each one of the arguments. */
 
@@ -1274,13 +1283,13 @@ static int attach_reattach_image(int argc, char *argv[], const char *method) {
         return 0;
 }
 
-VERB(verb_attach_image, "attach", "NAME|PATH [PREFIX…]", 2, VERB_ANY, 0,
+VERB(verb_attach_image, "attach", "NAME|PATH [PREFIX…]\0", 2, VERB_ANY, 0,
      "Attach the specified portable service image");
 static int verb_attach_image(int argc, char *argv[], uintptr_t _data, void *userdata) {
         return attach_reattach_image(argc, argv, strv_isempty(arg_extension_images) && !arg_force ? "AttachImage" : "AttachImageWithExtensions");
 }
 
-VERB(verb_detach_image, "detach", "NAME|PATH [PREFIX…]", 2, VERB_ANY, 0,
+VERB(verb_detach_image, "detach", "NAME|PATH [PREFIX…]\0", 2, VERB_ANY, 0,
      "Detach the specified portable service image");
 static int verb_detach_image(int argc, char *argv[], uintptr_t _data, void *userdata) {
         _cleanup_(sd_bus_message_unrefp) sd_bus_message *m = NULL, *reply = NULL;
@@ -1336,13 +1345,13 @@ static int verb_detach_image(int argc, char *argv[], uintptr_t _data, void *user
         return 0;
 }
 
-VERB(verb_reattach_image, "reattach", "NAME|PATH [PREFIX…]", 2, VERB_ANY, 0,
+VERB(verb_reattach_image, "reattach", "NAME|PATH [PREFIX…]\0", 2, VERB_ANY, 0,
      "Reattach the specified portable service image");
 static int verb_reattach_image(int argc, char *argv[], uintptr_t _data, void *userdata) {
         return attach_reattach_image(argc, argv, strv_isempty(arg_extension_images) && !arg_force ? "ReattachImage" : "ReattachImageWithExtensions");
 }
 
-VERB(verb_is_image_attached, "is-attached", "NAME|PATH", 2, 2, 0,
+VERB(verb_is_image_attached, "is-attached", "NAME|PATH\0", 2, 2, 0,
      "Query if portable service image is attached");
 static int verb_is_image_attached(int argc, char *argv[], uintptr_t _data, void *userdata) {
         _cleanup_(sd_bus_message_unrefp) sd_bus_message *m = NULL, *reply = NULL;
@@ -1394,11 +1403,12 @@ static int verb_is_image_attached(int argc, char *argv[], uintptr_t _data, void 
         return streq(state, "detached");
 }
 
-VERB(verb_read_only_image, "read-only", "NAME|PATH [BOOL]", 2, 3, 0,
+VERB(verb_read_only_image, "read-only", "NAME|PATH [BOOL]\0", 2, 3, 0,
      "Mark or unmark portable service image read-only");
 static int verb_read_only_image(int argc, char *argv[], uintptr_t _data, void *userdata) {
         _cleanup_(sd_bus_error_free) sd_bus_error error = SD_BUS_ERROR_NULL;
         _cleanup_(sd_bus_flush_close_unrefp) sd_bus *bus = NULL;
+        _cleanup_free_ char *image = NULL;
         int b = true, r;
 
         if (argc > 2) {
@@ -1407,20 +1417,24 @@ static int verb_read_only_image(int argc, char *argv[], uintptr_t _data, void *u
                         return log_error_errno(b, "Failed to parse boolean argument: %s", argv[2]);
         }
 
+        r = determine_image(argv[1], false, &image);
+        if (r < 0)
+                return r;
+
         r = acquire_bus(&bus);
         if (r < 0)
                 return r;
 
         (void) polkit_agent_open_if_enabled(arg_transport, arg_ask_password);
 
-        r = bus_call_method(bus, bus_portable_mgr, "MarkImageReadOnly", &error, NULL, "sb", argv[1], b);
+        r = bus_call_method(bus, bus_portable_mgr, "MarkImageReadOnly", &error, NULL, "sb", image, b);
         if (r < 0)
                 return log_error_errno(r, "Could not mark image read-only: %s", bus_error_message(&error, r));
 
         return 0;
 }
 
-VERB(verb_remove_image, "remove", "NAME|PATH…", 2, VERB_ANY, 0,
+VERB(verb_remove_image, "remove", "NAME|PATH…\0", 2, VERB_ANY, 0,
      "Remove a portable service image");
 static int verb_remove_image(int argc, char *argv[], uintptr_t _data, void *userdata) {
         _cleanup_(sd_bus_flush_close_unrefp) sd_bus *bus = NULL;
@@ -1435,12 +1449,17 @@ static int verb_remove_image(int argc, char *argv[], uintptr_t _data, void *user
         for (i = 1; i < argc; i++) {
                 _cleanup_(sd_bus_error_free) sd_bus_error error = SD_BUS_ERROR_NULL;
                 _cleanup_(sd_bus_message_unrefp) sd_bus_message *m = NULL;
+                _cleanup_free_ char *image = NULL;
+
+                r = determine_image(argv[i], false, &image);
+                if (r < 0)
+                        return r;
 
                 r = bus_message_new_method_call(bus, &m, bus_portable_mgr, "RemoveImage");
                 if (r < 0)
                         return bus_log_create_error(r);
 
-                r = sd_bus_message_append(m, "s", argv[i]);
+                r = sd_bus_message_append(m, "s", image);
                 if (r < 0)
                         return bus_log_create_error(r);
 
@@ -1453,11 +1472,12 @@ static int verb_remove_image(int argc, char *argv[], uintptr_t _data, void *user
         return 0;
 }
 
-VERB(verb_set_limit, "set-limit", "[NAME|PATH] LIMIT", 2, 3, 0,
+VERB(verb_set_limit, "set-limit", "[NAME|PATH] LIMIT\0", 2, 3, 0,
      "Set image or pool size limit (disk quota)");
 static int verb_set_limit(int argc, char *argv[], uintptr_t _data, void *userdata) {
         _cleanup_(sd_bus_error_free) sd_bus_error error = SD_BUS_ERROR_NULL;
         _cleanup_(sd_bus_flush_close_unrefp) sd_bus *bus = NULL;
+        _cleanup_free_ char *image = NULL;
         uint64_t limit;
         int r;
 
@@ -1475,10 +1495,14 @@ static int verb_set_limit(int argc, char *argv[], uintptr_t _data, void *userdat
                         return log_error_errno(r, "Failed to parse size: %s", argv[argc-1]);
         }
 
-        if (argc > 2)
+        if (argc > 2) {
                 /* With two arguments changes the quota limit of the specified image */
-                r = bus_call_method(bus, bus_portable_mgr, "SetImageLimit", &error, NULL, "st", argv[1], limit);
-        else
+                r = determine_image(argv[1], false, &image);
+                if (r < 0)
+                        return r;
+
+                r = bus_call_method(bus, bus_portable_mgr, "SetImageLimit", &error, NULL, "st", image, limit);
+        } else
                 /* With one argument changes the pool quota limit */
                 r = bus_call_method(bus, bus_portable_mgr, "SetPoolLimit", &error, NULL, "t", limit);
 
@@ -1513,40 +1537,7 @@ static int dump_profiles(void) {
         return 0;
 }
 
-static int help(void) {
-        _cleanup_(table_unrefp) Table *verbs = NULL, *options = NULL;
-        int r;
-
-        pager_open(arg_pager_flags);
-
-        r = verbs_get_help_table(&verbs);
-        if (r < 0)
-                return r;
-
-        r = option_parser_get_help_table(&options);
-        if (r < 0)
-                return r;
-
-        (void) table_sync_column_widths(0, verbs, options);
-
-        help_cmdline("[OPTIONS…] COMMAND …");
-        help_abstract("Attach or detach portable services in the local system.");
-
-        help_section("Commands");
-        r = table_print_or_warn(verbs);
-        if (r < 0)
-                return r;
-
-        help_section("Options");
-        r = table_print_or_warn(options);
-        if (r < 0)
-                return r;
-
-        help_man_page_reference("portablectl", "1");
-        return 0;
-}
-
-VERB_COMMON_HELP_HIDDEN(help);
+VERB_COMMON_HELP_AUTO_HIDDEN();
 
 static int parse_argv(int argc, char *argv[], char ***remaining_args) {
         assert(argc >= 0);
@@ -1560,7 +1551,7 @@ static int parse_argv(int argc, char *argv[], char ***remaining_args) {
                 switch (c) {
 
                 OPTION_COMMON_HELP:
-                        return help();
+                        return command_print_help();
 
                 OPTION_COMMON_VERSION:
                         return version();
@@ -1677,6 +1668,9 @@ static int parse_argv(int argc, char *argv[], char ***remaining_args) {
                 OPTION_LONG("system", NULL, /* help= */ NULL):
                         arg_runtime_scope = RUNTIME_SCOPE_SYSTEM;
                         break;
+
+                OPTION_COMMON_INTROSPECT_CLI:
+                        return introspect_cli(SD_JSON_FORMAT_OFF);
                 }
 
         *remaining_args = option_parser_get_args(&opts);

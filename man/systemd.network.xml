@@ -347,7 +347,7 @@
           required when determining whether the link is online (including when running
           <command>systemd-networkd-wait-online</command>). Takes one of <literal>ipv4</literal>,
           <literal>ipv6</literal>, <literal>both</literal>, or <literal>any</literal>. Defaults to
-          <literal>no</literal>. Note that this option has no effect if
+          <literal>any</literal>. Note that this option has no effect if
           <literal>RequiredForOnline=no</literal>.</para>
 
           <xi:include href="version-info.xml" xpointer="v249"/>
@@ -838,6 +838,9 @@ DuplicateAddressDetection=none</programlisting></para>
           Domain name routing has no equivalent in the traditional glibc API, which has no concept of
           domain name servers limited to a specific link.</para>
 
+          <para>This option may be specified more than once. If an empty string is assigned,
+          then the all previous assignments are cleared.</para>
+
           <xi:include href="version-info.xml" xpointer="v216"/>
         </listitem>
       </varlistentry>
@@ -1166,16 +1169,18 @@ DuplicateAddressDetection=none</programlisting></para>
       </varlistentry>
 
       <varlistentry>
-        <term><varname>IPv6ProxyNDPAddress=</varname></term>
+        <term><varname>ProxyNeighbor=</varname></term>
         <listitem>
-          <para>An IPv6 address, for which Neighbour Advertisement messages will be proxied. This
-          option may be specified more than once. <command>systemd-networkd</command> will add the
-          <varname>IPv6ProxyNDPAddress=</varname> entries to the kernel's IPv6 neighbor proxy table.
-          This setting implies <varname>IPv6ProxyNDP=yes</varname> but has no effect if
-          <varname>IPv6ProxyNDP=</varname> has been set to false. When unset, the kernel's default will
-          be used.</para>
+          <para>Takes an IPv4 or IPv6 address for which ARP requests or Neighbour Advertisement messages will
+          be proxied. This option may be specified more than once. <command>systemd-networkd</command> will
+          add the specified address to the kernel's neighbour proxy table. For an IPv4 address, a proxy ARP
+          entry will be added. For an IPv6 address, a proxy NDP entry will be added. When an IPv6 address is
+          specified, <varname>IPv6ProxyNDP=yes</varname> is implied. If <varname>IPv6ProxyNDP=</varname> is
+          explicitly disabled, IPv6 addresses specified with <varname>ProxyNeighbor=</varname> are ignored.
+          Note, unlike IPv6, specifying an IPv4 address does <emphasis>not</emphasis> imply
+          <varname>IPv4ProxyARP=</varname>.</para>
 
-          <xi:include href="version-info.xml" xpointer="v233"/>
+          <xi:include href="version-info.xml" xpointer="v262"/>
         </listitem>
       </varlistentry>
 
@@ -1279,10 +1284,10 @@ DuplicateAddressDetection=none</programlisting></para>
         <term><varname>VXLAN=</varname></term>
         <term><varname>Xfrm=</varname></term>
         <listitem>
-          <para>The name of an IPoIB, IPVLAN, IPVTAP, MACsec, MACVLAN, MACVTAP, tunnel, VLAN,
-          VXLAN, or Xfrm to be created on the link. See
+          <para>Takes a space-separated list of stacked netdevs to be created on the interface. See
           <citerefentry><refentrytitle>systemd.netdev</refentrytitle><manvolnum>5</manvolnum></citerefentry>.
-          This option may be specified more than once.</para>
+          This option may be specified more than once. If an empty string is specified, previous assignments
+          for all netdev types are cleared.</para>
 
           <xi:include href="version-info.xml" xpointer="v211"/>
         </listitem>

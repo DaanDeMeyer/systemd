@@ -21,6 +21,7 @@
 #include "alloc-util.h"
 #include "architecture.h"
 #include "argv-util.h"
+#include "bitfield.h"
 #include "capability-util.h"
 #include "cgroup-util.h"
 #include "dirent-util.h"
@@ -349,17 +350,17 @@ int pidref_get_cmdline_strv(const PidRef *pid, ProcessCmdlineFlags flags, char *
         return 0;
 }
 
-int pid_is_kernel_thread(pid_t pid) {
+int procfs_get_stat_flags(const char *path, unsigned long long *ret) {
         int r;
 
-        if (IN_SET(pid, 0, 1) || pid == getpid_cached()) /* pid 1, and we ourselves certainly aren't a kernel thread */
-                return 0;
-        if (!pid_is_valid(pid))
-                return -EINVAL;
+        assert(path);
+        assert(ret);
 
-        const char *p = procfs_file_alloca(pid, "stat");
+        /* Read the 'flags' field (9th field, task->flags) from the given /proc/[pid]/stat or
+         * /proc/[pid]/task/[tid]/stat file. */
+
         _cleanup_free_ char *line = NULL;
-        r = read_one_line_file(p, &line);
+        r = read_one_line_file(path, &line);
         if (r == -ENOENT)
                 return -ESRCH;
         if (r < 0)
@@ -396,8 +397,21 @@ int pid_is_kernel_thread(pid_t pid) {
                 return -EINVAL;
         q[l] = 0;
 
+        return safe_atollu(q, ret);
+}
+
+int pid_is_kernel_thread(pid_t pid) {
+        int r;
+
+        if (IN_SET(pid, 0, 1) || pid == getpid_cached()) /* pid 1, and we ourselves certainly aren't a kernel thread */
+                return 0;
+        if (!pid_is_valid(pid))
+                return -EINVAL;
+
+        const char *p = procfs_file_alloca(pid, "stat");
+
         unsigned long long flags;
-        r = safe_atollu(q, &flags);
+        r = procfs_get_stat_flags(p, &flags);
         if (r < 0)
                 return r;
 
@@ -802,6 +816,53 @@ int get_process_umask(pid_t pid, mode_t *ret) {
                 return r;
 
         return parse_mode(m, ret);
+}
+
+static int pid_get_sigmask(pid_t pid, const char *field_name, uint64_t *ret) {
+        _cleanup_free_ char *field = NULL;
+        int r;
+
+        assert(pid >= 0);
+        assert(field_name);
+        assert(ret);
+
+        r = procfs_file_get_field(pid, "status", field_name, &field);
+        if (r == -ENOENT)
+                return -ESRCH;
+        if (r < 0)
+                return r;
+
+        return safe_atou64_full(field, 16, ret);
+}
+
+static int pidref_has_sigmask(const PidRef *pidref, int sig, const char *field_name) {
+        uint64_t mask;
+        int r;
+
+        if (!pidref_is_set(pidref))
+                return -ESRCH;
+        if (pidref_is_remote(pidref))
+                return -EREMOTE;
+        if (!SIGNAL_VALID(sig))
+                return -EINVAL;
+
+        r = pid_get_sigmask(pidref->pid, field_name, &mask);
+        if (r < 0)
+                return r;
+
+        r = pidref_verify(pidref);
+        if (r < 0)
+                return r;
+
+        return BIT_SET(mask, sig - 1);
+}
+
+int pidref_has_sigcgt(const PidRef *pidref, int sig) {
+        return pidref_has_sigmask(pidref, sig, "SigCgt");
+}
+
+int pidref_has_sigblk(const PidRef *pidref, int sig) {
+        return pidref_has_sigmask(pidref, sig, "SigBlk");
 }
 
 /*

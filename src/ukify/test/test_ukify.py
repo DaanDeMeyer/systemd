@@ -272,6 +272,8 @@ def test_parse_args_many():
             '--no-measure',
             '--policy-digest',
             '--no-policy-digest',
+            '--sign-initrd-pcrs',
+            '--no-sign-initrd-pcrs',
         ]
     )
     assert opts.linux == pathlib.Path('/ARG1')
@@ -294,6 +296,7 @@ def test_parse_args_many():
     assert opts.output == pathlib.Path('OUTPUT')
     assert opts.measure is False
     assert opts.policy_digest is False
+    assert opts.sign_initrd_pcrs is False
 
 
 def test_parse_sections():
@@ -1126,6 +1129,58 @@ def test_pcr_signing3(kernel_initrd, tmp_path):
     shutil.rmtree(tmp_path)
 
 
+def test_pcr_signing_initrd_pcrs(kernel_initrd, tmp_path):
+    if kernel_initrd is None:
+        pytest.skip('linux+initrd not found')
+    try:
+        systemd_measure()
+    except ValueError:
+        pytest.skip('systemd-measure not found')
+
+    ourdir = pathlib.Path(__file__).parent
+    pub = unbase64(ourdir / 'example.tpm2-pcr-public.pem.base64')
+    priv = unbase64(ourdir / 'example.tpm2-pcr-private.pem.base64')
+
+    output = f'{tmp_path}/signed.efi'
+    args = [
+        'build',
+        *kernel_initrd,
+        f'--output={output}',
+        '--uname=1.2.3',
+        '--cmdline=ARG1 ARG2 ARG3',
+        '--os-release=ID=foobar\n',
+        '--pcr-banks=sha384',  # sha1 might not be allowed, use something else
+        f'--pcr-private-key={priv.name}',
+        f'--pcr-public-key={pub.name}',
+        '--sign-initrd-pcrs',
+    ] + arg_tools
+
+    opts = ukify.parse_args(args)
+    try:
+        ukify.check_inputs(opts)
+    except OSError as e:
+        pytest.skip(str(e))
+
+    ukify.make_uki(opts)
+
+    subprocess.check_call(
+        ['objcopy', f'--dump-section=.pcrsig={tmp_path}/out.pcrsig', output, tmp_path / 'dummy'],
+        text=True,
+    )
+
+    sig = json.loads(open(tmp_path / 'out.pcrsig').read())
+    assert list(sig.keys()) == ['sha384']
+    assert len(sig['sha384']) == 5  # five items for five phase paths
+    assert 'ref' not in sig['sha384'][0]
+    assert 'ref' not in sig['sha384'][1]
+    assert 'ref' not in sig['sha384'][2]
+    assert 'ref' not in sig['sha384'][3]
+    assert 'ref' in sig['sha384'][4]
+    assert sig['sha384'][4]['ref'] == 'initrd'
+
+    shutil.rmtree(tmp_path)
+
+
 def test_key_cert_generation(tmp_path):
     opts = ukify.parse_args(
         [
@@ -1188,6 +1243,65 @@ def test_key_cert_generation(tmp_path):
     )  # fmt: skip
     assert 'Certificate' in out
     assert re.search(r'Issuer: CN\s?=\s?SecureBoot signing key on host', out)
+
+
+def test_key_cert_generation_common_name(tmp_path):
+    opts = ukify.parse_args(
+        [
+            'genkey',
+            f'--secureboot-private-key={tmp_path / "sb.priv.pem"}',
+            f'--secureboot-certificate={tmp_path / "sb.cert.pem"}',
+            '--secureboot-certificate-common-name=ukify test key',
+        ]
+    )
+    assert opts.verb == 'genkey'
+
+    pytest.importorskip('cryptography')
+
+    ukify.generate_keys(opts)
+
+    if not shutil.which('openssl'):
+        return
+
+    out = subprocess.check_output(
+        [
+            'openssl', 'x509',
+            '-in', tmp_path / 'sb.cert.pem',
+            '-text',
+            '-noout',
+        ],
+        text=True,
+    )  # fmt: skip
+    assert re.search(r'Subject: CN\s?=\s?ukify test key', out)
+    assert re.search(r'Issuer: CN\s?=\s?ukify test key', out)
+
+
+def test_key_cert_generation_empty_common_name(tmp_path):
+    opts = ukify.parse_args(
+        [
+            'genkey',
+            f'--secureboot-private-key={tmp_path / "sb.priv.pem"}',
+            f'--secureboot-certificate={tmp_path / "sb.cert.pem"}',
+            '--secureboot-certificate-common-name=',
+        ]
+    )
+
+    with pytest.raises(ValueError, match='--secureboot-certificate-common-name= must not be empty'):
+        ukify.generate_keys(opts)
+
+
+def test_key_cert_generation_common_name_too_long(tmp_path):
+    opts = ukify.parse_args(
+        [
+            'genkey',
+            f'--secureboot-private-key={tmp_path / "sb.priv.pem"}',
+            f'--secureboot-certificate={tmp_path / "sb.cert.pem"}',
+            f'--secureboot-certificate-common-name={"x" * 65}',
+        ]
+    )
+
+    with pytest.raises(ValueError, match='is longer than 64 bytes'):
+        ukify.generate_keys(opts)
 
 
 @pytest.mark.skipif(not slow_tests, reason='slow')

@@ -200,8 +200,10 @@ int manager_serialize(
         (void) serialize_ratelimit(f, "reload-reexec-ratelimit", &m->reload_reexec_ratelimit);
         (void) serialize_ratelimit(f, "event-loop-ratelimit", &m->event_loop_ratelimit);
 
-        (void) serialize_id128(f, "bus-id", m->bus_id);
+        (void) serialize_id128(f, "bus-id",
+                               sd_id128_is_null(m->bus_id) ? m->deserialized_bus_id : m->bus_id);
         bus_track_serialize(m->subscribed, f, "subscribed");
+        (void) serialize_strv(f, "subscribed", m->subscribed_as_strv);
 
         r = dynamic_user_serialize(m, f, fds);
         if (r < 0)
@@ -517,7 +519,7 @@ static void manager_deserialize_gid_refs_one(Manager *m, const char *value) {
 
 static void deserialize_restrict_fsaccess(Manager *m, const char *l, FDSet *fds) {
         const char *val;
-        int fd;
+        int fd, r;
 
         FOREACH_ELEMENT(name, restrict_fsaccess_link_names) {
                 val = startswith(l, *name);
@@ -532,6 +534,17 @@ static void deserialize_restrict_fsaccess(Manager *m, const char *l, FDSet *fds)
                         return;
                 }
                 close_and_replace(m->restrict_fsaccess_link_fds[name - restrict_fsaccess_link_names], fd);
+                return;
+        }
+
+        val = startswith(l, "restrict-fsaccess-ptrace-filter=");
+        if (val) {
+                r = parse_boolean(val);
+                if (r < 0)
+                        log_warning_errno(r, "bpf-restrict-fsaccess: Failed to parse ptrace filter state '%s', "
+                                          "ignoring: %m", val);
+                else
+                        m->restrict_fsaccess_ptrace_filter = r;
                 return;
         }
 

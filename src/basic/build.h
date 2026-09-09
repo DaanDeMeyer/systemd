@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 #pragma once
 
-#include "basic-forward.h"
+#include "forward.h"
 
 extern const char* const systemd_features;
 
 int version(void);
+int version_only(void);

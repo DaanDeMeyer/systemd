@@ -110,6 +110,7 @@ DLSYM_PROTOTYPE(EC_GROUP_get0_generator) = NULL;
 DLSYM_PROTOTYPE(EC_GROUP_get0_order) = NULL;
 DLSYM_PROTOTYPE(EC_GROUP_get_curve) = NULL;
 DLSYM_PROTOTYPE(EC_GROUP_get_curve_name) = NULL;
+static DLSYM_PROTOTYPE(EC_GROUP_get_degree) = NULL;
 DLSYM_PROTOTYPE(EC_GROUP_get_field_type) = NULL;
 DLSYM_PROTOTYPE(EC_GROUP_new_by_curve_name) = NULL;
 DLSYM_PROTOTYPE(EC_POINT_free) = NULL;
@@ -126,6 +127,7 @@ static DLSYM_PROTOTYPE(ERR_peek_last_error) = NULL;
 DLSYM_PROTOTYPE(EVP_CIPHER_CTX_ctrl) = NULL;
 DLSYM_PROTOTYPE(EVP_CIPHER_CTX_free) = NULL;
 static DLSYM_PROTOTYPE(EVP_CIPHER_CTX_get_block_size) = NULL;
+DLSYM_PROTOTYPE(EVP_CIPHER_CTX_get_tag_length) = NULL;
 DLSYM_PROTOTYPE(EVP_CIPHER_CTX_new) = NULL;
 static DLSYM_PROTOTYPE(EVP_CIPHER_fetch) = NULL;
 DLSYM_PROTOTYPE(EVP_CIPHER_free) = NULL;
@@ -254,6 +256,7 @@ DLSYM_PROTOTYPE(PEM_read_PrivateKey) = NULL;
 DLSYM_PROTOTYPE(PEM_read_X509) = NULL;
 static DLSYM_PROTOTYPE(PEM_read_bio_PrivateKey) = NULL;
 static DLSYM_PROTOTYPE(PEM_read_bio_X509) = NULL;
+DLSYM_PROTOTYPE(PEM_write) = NULL;
 DLSYM_PROTOTYPE(PEM_write_PUBKEY) = NULL;
 DLSYM_PROTOTYPE(PEM_write_PrivateKey) = NULL;
 DLSYM_PROTOTYPE(PEM_write_X509) = NULL;
@@ -434,6 +437,7 @@ int dlopen_libcrypto(int log_level) {
                         DLSYM_ARG(EC_GROUP_get0_order),
                         DLSYM_ARG(EC_GROUP_get_curve),
                         DLSYM_ARG(EC_GROUP_get_curve_name),
+                        DLSYM_ARG(EC_GROUP_get_degree),
                         DLSYM_ARG(EC_GROUP_get_field_type),
                         DLSYM_ARG(EC_GROUP_new_by_curve_name),
                         DLSYM_ARG(EC_POINT_free),
@@ -450,6 +454,7 @@ int dlopen_libcrypto(int log_level) {
                         DLSYM_ARG(EVP_CIPHER_CTX_ctrl),
                         DLSYM_ARG(EVP_CIPHER_CTX_free),
                         DLSYM_ARG(EVP_CIPHER_CTX_get_block_size),
+                        DLSYM_ARG(EVP_CIPHER_CTX_get_tag_length),
                         DLSYM_ARG(EVP_CIPHER_CTX_new),
                         DLSYM_ARG(EVP_CIPHER_fetch),
                         DLSYM_ARG(EVP_CIPHER_free),
@@ -576,6 +581,7 @@ int dlopen_libcrypto(int log_level) {
                         DLSYM_ARG(PEM_read_X509),
                         DLSYM_ARG(PEM_read_bio_PrivateKey),
                         DLSYM_ARG(PEM_read_bio_X509),
+                        DLSYM_ARG(PEM_write),
                         DLSYM_ARG(PEM_write_PUBKEY),
                         DLSYM_ARG(PEM_write_PrivateKey),
                         DLSYM_ARG(PEM_write_X509),
@@ -1343,10 +1349,13 @@ int kdf_argon2id_derive(
         return 0;
 }
 
-/* Perform HKDF-SHA256 derivation, producing derive_size bytes of output.
+/* Perform HKDF (RFC 5869). 'key' is the input keying material (required, non-empty). 'salt' and 'info'
+ * are optional: pass NULL or an empty iovec to omit. The output is written to 'ret' as a fresh allocation
+ * of 'derive_size' bytes (must be ≤ 255 × HashLen).
  *
- * For more details see: https://docs.openssl.org/master/man7/EVP_KDF-HKDF.html */
-int kdf_hkdf_sha256(
+ * For more details see: https://www.openssl.org/docs/manmaster/man7/EVP_KDF-HKDF.html */
+int kdf_hkdf_derive(
+                const char *digest,
                 const struct iovec *key,
                 const struct iovec *salt,
                 const struct iovec *info,
@@ -1355,9 +1364,10 @@ int kdf_hkdf_sha256(
 
         int r;
 
-        assert(!key || key->iov_len > 0);
-        assert(!salt || salt->iov_len > 0);
-        assert(!info || info->iov_len > 0);
+        assert(digest);
+        assert(iovec_is_set(key));
+        assert(iovec_is_valid(salt));
+        assert(iovec_is_valid(info));
         assert(derive_size > 0);
         assert(ret);
 
@@ -1365,9 +1375,9 @@ int kdf_hkdf_sha256(
         if (r < 0)
                 return r;
 
-        _cleanup_(EVP_KDF_freep) EVP_KDF *kdf = sym_EVP_KDF_fetch(/* propq= */ NULL, "HKDF", /* propq= */ NULL);
+        _cleanup_(EVP_KDF_freep) EVP_KDF *kdf = sym_EVP_KDF_fetch(/* libctx= */ NULL, "HKDF", /* properties= */ NULL);
         if (!kdf)
-                return log_openssl_errors(LOG_DEBUG, "Failed to create new EVP_KDF for HKDF");
+                return log_openssl_errors(LOG_DEBUG, "Failed to create new EVP_KDF");
 
         _cleanup_(EVP_KDF_CTX_freep) EVP_KDF_CTX *ctx = sym_EVP_KDF_CTX_new(kdf);
         if (!ctx)
@@ -1377,36 +1387,44 @@ int kdf_hkdf_sha256(
         if (!bld)
                 return log_openssl_errors(LOG_DEBUG, "Failed to create new OSSL_PARAM_BLD");
 
+        if (!sym_OSSL_PARAM_BLD_push_utf8_string(bld, OSSL_KDF_PARAM_DIGEST, (char*) digest, /* bsize= */ 0))
+                return log_openssl_errors(LOG_DEBUG, "Failed to add HKDF OSSL_KDF_PARAM_DIGEST");
+
+        if (!sym_OSSL_PARAM_BLD_push_octet_string(bld, OSSL_KDF_PARAM_KEY, key->iov_base, key->iov_len))
+                return log_openssl_errors(LOG_DEBUG, "Failed to add HKDF OSSL_KDF_PARAM_KEY");
+
+        if (iovec_is_set(salt))
+                if (!sym_OSSL_PARAM_BLD_push_octet_string(bld, OSSL_KDF_PARAM_SALT, salt->iov_base, salt->iov_len))
+                        return log_openssl_errors(LOG_DEBUG, "Failed to add HKDF OSSL_KDF_PARAM_SALT");
+
+        if (iovec_is_set(info))
+                if (!sym_OSSL_PARAM_BLD_push_octet_string(bld, OSSL_KDF_PARAM_INFO, info->iov_base, info->iov_len))
+                        return log_openssl_errors(LOG_DEBUG, "Failed to add HKDF OSSL_KDF_PARAM_INFO");
+
+        _cleanup_(OSSL_PARAM_freep) OSSL_PARAM *params = sym_OSSL_PARAM_BLD_to_param(bld);
+        if (!params)
+                return log_openssl_errors(LOG_DEBUG, "Failed to build HKDF OSSL_PARAM");
+
         _cleanup_(erase_and_freep) void *buf = malloc(derive_size);
         if (!buf)
                 return log_oom_debug();
 
-        if (!sym_OSSL_PARAM_BLD_push_utf8_string(bld, "digest", "SHA256", 0))
-                return log_openssl_errors(LOG_DEBUG, "Failed to add HKDF digest");
-
-        if (key)
-                if (!sym_OSSL_PARAM_BLD_push_octet_string(bld, "key", key->iov_base, key->iov_len))
-                        return log_openssl_errors(LOG_DEBUG, "Failed to add HKDF key");
-
-        if (salt)
-                if (!sym_OSSL_PARAM_BLD_push_octet_string(bld, "salt", salt->iov_base, salt->iov_len))
-                        return log_openssl_errors(LOG_DEBUG, "Failed to add HKDF salt");
-
-        if (info)
-                if (!sym_OSSL_PARAM_BLD_push_octet_string(bld, "info", info->iov_base, info->iov_len))
-                        return log_openssl_errors(LOG_DEBUG, "Failed to add HKDF info");
-
-        _cleanup_(OSSL_PARAM_freep) OSSL_PARAM *openssl_params = sym_OSSL_PARAM_BLD_to_param(bld);
-        if (!openssl_params)
-                return log_openssl_errors(LOG_DEBUG, "Failed to build HKDF OSSL_PARAM");
-
-        if (sym_EVP_KDF_derive(ctx, buf, derive_size, openssl_params) <= 0)
+        if (sym_EVP_KDF_derive(ctx, buf, derive_size, params) <= 0)
                 return log_openssl_errors(LOG_DEBUG, "OpenSSL HKDF derive failed");
 
-        ret->iov_base = TAKE_PTR(buf);
-        ret->iov_len = derive_size;
-
+        *ret = IOVEC_MAKE(TAKE_PTR(buf), derive_size);
         return 0;
+}
+
+/* Perform HKDF-SHA256 derivation, producing derive_size bytes of output. */
+int kdf_hkdf_sha256(
+                const struct iovec *key,
+                const struct iovec *salt,
+                const struct iovec *info,
+                size_t derive_size,
+                struct iovec *ret) {
+
+        return kdf_hkdf_derive("SHA256", key, salt, info, derive_size, ret);
 }
 
 /* Encrypt the key data using RSA-OAEP with the provided label and specified digest algorithm. Returns 0 on
@@ -1721,24 +1739,43 @@ int ecc_pkey_to_curve_x_y(
         if (!sym_EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_EC_PUB_Y, &bn_y))
                 return log_openssl_errors(LOG_DEBUG, "Failed to get ECC point y");
 
-        size_t x_size = sym_BN_num_bytes(bn_x), y_size = sym_BN_num_bytes(bn_y);
-        _cleanup_free_ void *x = malloc(x_size), *y = malloc(y_size);
+        /* The affine coordinates are elements of the curve's underlying field and must be
+         * marshalled at the fixed field width. BN_bn2bin() writes the minimal big-endian
+         * encoding, dropping any leading zero bytes, so a coordinate whose most significant byte
+         * is zero (roughly 1 in 256 keys per coordinate) comes out one or more bytes short. A short
+         * coordinate makes callers such as tpm2_tpm2b_public_from_openssl_pkey() build a
+         * TPM2B_PUBLIC that TPM2_LoadExternal() rejects with TPM_RC_KEY. The object name hashes
+         * the marshalled public area, so the name a TPM derives for the key also stops matching
+         * the name systemd computes in software. Size the buffers to the field width and
+         * zero-pad. */
+        _cleanup_(EC_GROUP_freep) EC_GROUP *group = sym_EC_GROUP_new_by_curve_name(curve_id);
+        if (!group)
+                return log_openssl_errors(LOG_DEBUG, "ECC curve id %d not supported", curve_id);
+
+        int bits = sym_EC_GROUP_get_degree(group);
+        assert(bits > 0);
+
+        size_t size = DIV_ROUND_UP(bits, 8);
+        _cleanup_free_ void *x = malloc(size), *y = malloc(size);
         if (!x || !y)
                 return log_oom_debug();
 
-        assert(sym_BN_bn2bin(bn_x, x) == (int) x_size);
-        assert(sym_BN_bn2bin(bn_y, y) == (int) y_size);
+        if (sym_BN_bn2binpad(bn_x, x, size) < 0)
+                return log_debug_errno(SYNTHETIC_ERRNO(EIO), "Failed to marshal ECC point x to %zu bytes.", size);
+
+        if (sym_BN_bn2binpad(bn_y, y, size) < 0)
+                return log_debug_errno(SYNTHETIC_ERRNO(EIO), "Failed to marshal ECC point y to %zu bytes.", size);
 
         if (ret_curve_id)
                 *ret_curve_id = curve_id;
         if (ret_x)
                 *ret_x = TAKE_PTR(x);
         if (ret_x_size)
-                *ret_x_size = x_size;
+                *ret_x_size = size;
         if (ret_y)
                 *ret_y = TAKE_PTR(y);
         if (ret_y_size)
-                *ret_y_size = y_size;
+                *ret_y_size = size;
 
         return 0;
 }

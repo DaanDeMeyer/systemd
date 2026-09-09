@@ -38,7 +38,6 @@
 #include "format-table.h"
 #include "fs-util.h"
 #include "hashmap.h"
-#include "help-util.h"
 #include "image-policy.h"
 #include "initrd-util.h"
 #include "label-util.h"                 /* IWYU pragma: keep */
@@ -49,7 +48,6 @@
 #include "mkdir.h"
 #include "mount-util.h"
 #include "mountpoint-util.h"
-#include "options.h"
 #include "os-util.h"
 #include "pager.h"
 #include "parse-argument.h"
@@ -133,14 +131,27 @@ static ImageClass arg_image_class = IMAGE_SYSEXT;
 STATIC_DESTRUCTOR_REGISTER(arg_root, freep);
 STATIC_DESTRUCTOR_REGISTER(arg_image_policy, image_policy_freep);
 
+COMMAND(
+        "systemd-sysext\0",
+        "Merge system extension images into /usr/ and /opt/.",
+        .man_pages = "systemd-sysext(8)\0",
+        .flags = COMMAND_VERBS_SHARED,
+        .pager_flags = &arg_pager_flags,
+);
+COMMAND(
+        "systemd-confext\0",
+        "Merge configuration extension images into /etc/.",
+        .man_pages = "systemd-confext(8)\0",
+        .flags = COMMAND_VERBS_SHARED,
+        .pager_flags = &arg_pager_flags,
+);
+
 /* Helper struct for naming simplicity and reusability */
 static const struct {
-        const char *full_identifier;
         const char *short_identifier;
         const char *short_identifier_plural;
         const char *polkit_rw_action_id;
         const char *polkit_ro_action_id;
-        const char *blurb;
         const char *dot_directory_name;
         const char *directory_name;
         const char *level_env;
@@ -152,12 +163,10 @@ static const struct {
         unsigned long default_mount_flags;
 } image_class_info[_IMAGE_CLASS_MAX] = {
         [IMAGE_SYSEXT] = {
-                .full_identifier = "systemd-sysext",
                 .short_identifier = "sysext",
                 .short_identifier_plural = "extensions",
                 .polkit_rw_action_id = "io.systemd.sysext.manage",
                 .polkit_ro_action_id = "io.systemd.sysext.read",
-                .blurb = "Merge system extension images into /usr/ and /opt/.",
                 .dot_directory_name = ".systemd-sysext",
                 .level_env = "SYSEXT_LEVEL",
                 .scope_env = "SYSEXT_SCOPE",
@@ -168,12 +177,10 @@ static const struct {
                 .default_mount_flags = MS_RDONLY|MS_NODEV,
         },
         [IMAGE_CONFEXT] = {
-                .full_identifier = "systemd-confext",
                 .short_identifier = "confext",
                 .short_identifier_plural = "confexts",
                 .polkit_rw_action_id = "io.systemd.confext.manage",
                 .polkit_ro_action_id = "io.systemd.confext.read",
-                .blurb = "Merge configuration extension images into /etc/.",
                 .dot_directory_name = ".systemd-confext",
                 .level_env = "CONFEXT_LEVEL",
                 .scope_env = "CONFEXT_SCOPE",
@@ -998,7 +1005,7 @@ static int resolve_mutable_directory(
                 if (fchmod(chmod_fd, hierarchy_mode) < 0)
                         return log_error_errno(errno, "Failed to chmod directory '%s/%s': %m", strempty(root), skip_leading_slash(path));
 
-                r = mac_selinux_fix_full(chmod_fd, /* inode_path= */ NULL, hierarchy, /* flags= */ 0);
+                r = mac_selinux_fix_full(chmod_fd, /* inode_path= */ NULL, hierarchy, /* flags= */ 0, /* label_context= */ NULL);
                 if (r < 0)
                         return log_error_errno(r, "Failed to fix SELinux label for '%s/%s': %m", strempty(root), skip_leading_slash(path));
         }
@@ -1376,7 +1383,7 @@ static int mount_overlayfs_with_op(
         if (atfd < 0)
                 return log_error_errno(errno, "Failed to open directory '%s': %m", meta_path);
 
-        r = mac_selinux_fix_full(atfd, /* inode_path= */ NULL, op->hierarchy, /* flags= */ 0);
+        r = mac_selinux_fix_full(atfd, /* inode_path= */ NULL, op->hierarchy, /* flags= */ 0, /* label_context= */ NULL);
         if (r < 0)
                 return log_error_errno(r, "Failed to fix SELinux label for '%s': %m", meta_path);
 
@@ -1389,7 +1396,7 @@ static int mount_overlayfs_with_op(
                 if (dfd < 0)
                         return log_error_errno(errno, "Failed to open directory '%s': %m", op->work_dir);
 
-                r = mac_selinux_fix_full(dfd, /* inode_path= */ NULL, op->hierarchy, /* flags= */ 0);
+                r = mac_selinux_fix_full(dfd, /* inode_path= */ NULL, op->hierarchy, /* flags= */ 0, /* label_context= */ NULL);
                 if (r < 0)
                         return log_error_errno(r, "Failed to fix SELinux label for '%s': %m", op->work_dir);
 
@@ -1601,7 +1608,7 @@ static int store_info_in_meta(
         if (atfd < 0)
                 return log_error_errno(errno, "Failed to open directory '%s': %m", f);
 
-        r = mac_selinux_fix_full(atfd, /* inode_path= */ NULL, hierarchy, /* flags= */ 0);
+        r = mac_selinux_fix_full(atfd, /* inode_path= */ NULL, hierarchy, /* flags= */ 0, /* label_context= */ NULL);
         if (r < 0)
                 return log_error_errno(r, "Failed to fix SELinux label for '%s': %m", hierarchy);
 
@@ -1808,6 +1815,10 @@ static int unmerge_hierarchy(const Context *c, const char *p, const char *submou
                         l = cunescape_length(escaped_work_dir_in_root, r, 0, &work_dir_in_root);
                         if (l < 0)
                                 return log_error_errno(l, "Failed to unescape work directory path: %m");
+                        if (path_is_absolute(work_dir_in_root) || !path_is_normalized(work_dir_in_root))
+                                return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                                       "Invalid work directory path '%s'.", work_dir_in_root);
+
                         work_dir = path_join(c->root, work_dir_in_root);
                         if (!work_dir)
                                 return log_oom();
@@ -1910,7 +1921,7 @@ static int unmerge(const Context *c) {
 
         assert(c);
 
-        (void) DLOPEN_LIBMOUNT(LOG_DEBUG, required);
+        (void) dlopen_libmount(LOG_DEBUG);
 
         r = get_extension_release_metadata(c, &need_to_reload, &units_to_restart, &units_to_reload_or_restart);
         if (r < 0)
@@ -2488,9 +2499,9 @@ static int merge(const Context *c, Hashmap *images) {
 
         assert(c);
 
-        (void) DLOPEN_CRYPTSETUP(LOG_DEBUG, recommended);
-        (void) DLOPEN_LIBBLKID(LOG_DEBUG, required);
-        (void) DLOPEN_LIBMOUNT(LOG_DEBUG, required);
+        (void) dlopen_cryptsetup(LOG_DEBUG);
+        (void) dlopen_libblkid(LOG_DEBUG);
+        (void) dlopen_libmount(LOG_DEBUG);
 
         _cleanup_(pidref_done) PidRef pidref = PIDREF_NULL;
         r = pidref_safe_fork("(sd-merge)", FORK_DEATHSIG_SIGTERM|FORK_LOG|FORK_NEW_MOUNTNS, &pidref);
@@ -3125,45 +3136,11 @@ static int vl_method_list(sd_varlink *link, sd_json_variant *parameters, sd_varl
         return 0;
 }
 
-static int help(void) {
-        _cleanup_(table_unrefp) Table *verbs = NULL, *commands = NULL, *options = NULL;
-        int r;
-
-        r = verbs_get_help_table(&verbs);
-        if (r < 0)
-                return r;
-
-        r = option_parser_get_help_table(&commands);
-        if (r < 0)
-                return r;
-
-        r = option_parser_get_help_table_group("Options", &options);
-        if (r < 0)
-                return r;
-
-        (void) table_sync_column_widths(0, verbs, commands, options);
-
-        help_cmdline("[OPTIONS...] COMMAND");
-        help_abstract(image_class_info[arg_image_class].blurb);
-
-        help_section("Commands");
-        r = table_print_or_warn(verbs);
-        if (r < 0)
-                return r;
-        r = table_print_or_warn(commands);
-        if (r < 0)
-                return r;
-
-        help_section("Options");
-        r = table_print_or_warn(options);
-        if (r < 0)
-                return r;
-
-        help_man_page_reference(image_class_info[arg_image_class].full_identifier, "8");
-        return 0;
+VERB_FULL(verb_help, "help", NULL, VERB_ANY, VERB_ANY, 0, /* dat= */ 0u, /* help= */ NULL);
+static int verb_help(int argc, char **argv, uintptr_t data, void *userdata) {
+        return command_print_help_name(
+                        arg_image_class == IMAGE_SYSEXT ? "systemd-sysext" : "systemd-confext");
 }
-
-VERB_COMMON_HELP_HIDDEN(help);
 
 static int parse_argv(int argc, char *argv[], char ***ret_args) {
         int r;
@@ -3178,12 +3155,10 @@ static int parse_argv(int argc, char *argv[], char ***ret_args) {
                 switch (c) {
 
                 OPTION_COMMON_HELP:
-                        return help();
+                        return verb_help(argc, argv, /* data= */ 0u, /* userdata= */ NULL);
 
                 OPTION_COMMON_VERSION:
                         return version();
-
-                OPTION_GROUP("Options"): {}
 
                 OPTION_LONG("root", "PATH", "Operate relative to root PATH"):
                         r = parse_path_argument(opts.arg, false, &arg_root);
@@ -3251,6 +3226,9 @@ static int parse_argv(int argc, char *argv[], char ***ret_args) {
                         if (r <= 0)
                                 return r;
                         break;
+
+                OPTION_COMMON_INTROSPECT_CLI:
+                        return introspect_cli(arg_json_format_flags);
                 }
 
         r = sd_varlink_invocation(SD_VARLINK_ALLOW_ACCEPT);
@@ -3267,7 +3245,10 @@ static int run(int argc, char *argv[]) {
         char **args = NULL;
         int r;
 
+        LIBBLKID_NOTE(required);
         LIBCRYPTO_NOTE(suggested);
+        LIBCRYPTSETUP_NOTE(recommended);
+        LIBMOUNT_NOTE(required);
         LIBSELINUX_NOTE(recommended);
 
         log_setup();

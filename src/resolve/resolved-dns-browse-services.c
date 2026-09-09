@@ -120,7 +120,7 @@ static int mdns_maintenance_query(sd_event_source *s, uint64_t usec, void *userd
                         service->service_browser->question_utf8,
                         service->service_browser->question_idna,
                         /* question_bypass= */ NULL,
-                        service->service_browser->ifindex,
+                        service->ifindex,
                         service->service_browser->flags);
         if (r < 0)
                 return log_error_errno(r, "Failed to create mDNS query for maintenance: %m");
@@ -178,8 +178,8 @@ int dns_add_new_service(DnsServiceBrowser *sb, DnsResourceRecord *rr, int owner_
                 .query = NULL,
                 .rr_ttl_state = DNS_RECORD_TTL_STATE_80_PERCENT,
         };
-
-        LIST_PREPEND(dns_services, sb->dns_services, s);
+        if (!s->rr)
+                return log_oom();
 
         /* Schedule the first cache maintenance query at 80% of the record's
          * TTL. Subsequent queries issued at 5% increments until 100% of the
@@ -218,6 +218,8 @@ int dns_add_new_service(DnsServiceBrowser *sb, DnsResourceRecord *rr, int owner_
                 return log_error_errno(
                                 r,
                                 "Failed to schedule mDNS maintenance query for DNS service: %m");
+
+        LIST_PREPEND(dns_services, sb->dns_services, s);
 
         TAKE_PTR(s);
         return 0;
@@ -267,25 +269,88 @@ int mdns_service_update(DnssdDiscoveredService *service, DnsResourceRecord *rr, 
         return 0;
 }
 
-bool dns_service_match_and_update(DnssdDiscoveredService *services, DnsResourceRecord *rr, int owner_family, usec_t until) {
+static int mdns_answer_item_ifindex(DnsServiceBrowser *sb, DnsAnswerItem *item) {
+        assert(sb);
+        assert(item);
+
+        return item->ifindex > 0 ? item->ifindex : sb->ifindex;
+}
+
+static int dns_service_matches(
+                DnssdDiscoveredService *service,
+                DnsResourceRecord *rr,
+                int owner_family,
+                int ifindex) {
+
+        int r;
+
+        assert(service);
+        assert(rr);
+
+        r = dns_resource_record_equal(service->rr, rr);
+        if (r <= 0)
+                return r;
+
+        return service->family == owner_family && service->ifindex == ifindex;
+}
+
+int dns_service_match_and_update(
+                DnssdDiscoveredService *services,
+                DnsResourceRecord *rr,
+                int owner_family,
+                int ifindex,
+                usec_t until) {
+
         usec_t t = now(CLOCK_BOOTTIME);
+        int r;
 
-        /* Check if a discovered service matching the given resource record and owner family exists in the list.
-        * If found, update the service's expiration time if the new 'until' is later, unless the TTL is <= 1 (goodbye packet).
-        * Return true if a matching service is found, false otherwise. */
+        /* Check if a discovered service matching the given resource record, owner family, and ifindex exists
+         * in the list. If found, update the service's expiration time if the new 'until' is later, unless the
+         * TTL is <= 1 (goodbye packet). Return positive if a matching service is found, zero otherwise. */
 
-        LIST_FOREACH(dns_services, service, services)
-                if (dns_resource_record_equal(service->rr, rr) > 0 && service->family == owner_family) {
-                        if (rr->ttl <= 1)
-                                return true;
+        LIST_FOREACH(dns_services, service, services) {
+                r = dns_service_matches(service, rr, owner_family, ifindex);
+                if (r < 0)
+                        return r;
+                if (r == 0)
+                        continue;
 
-                        if (service->until < until)
-                                mdns_service_update(service, rr, t, until);
+                if (rr->ttl <= 1)
+                        return 1;
 
-                        return true;
-                }
+                if (service->until < until)
+                        mdns_service_update(service, rr, t, until);
 
-        return false;
+                return 1;
+        }
+
+        return 0;
+}
+
+int mdns_answer_contains_service(
+                DnsServiceBrowser *sb,
+                DnsAnswer *answer,
+                DnssdDiscoveredService *service) {
+
+        DnsAnswerItem *item;
+        int r;
+
+        assert(sb);
+        assert(service);
+
+        DNS_ANSWER_FOREACH_ITEM(item, answer) {
+                r = dns_service_matches(
+                                service,
+                                item->rr,
+                                service->family,
+                                mdns_answer_item_ifindex(sb, item));
+                if (r < 0)
+                        return r;
+                if (r > 0)
+                        return 1;
+        }
+
+        return 0;
 }
 
 void dns_browse_services_purge(Manager *m, int family) {
@@ -327,9 +392,14 @@ int mdns_manage_services_answer(DnsServiceBrowser *sb, DnsAnswer *answer, int ow
         DNS_ANSWER_FOREACH_ITEM(item, answer) {
                 _cleanup_free_ char *name = NULL, *type = NULL, *domain = NULL;
                 _cleanup_(sd_json_variant_unrefp) sd_json_variant *entry = NULL;
-                int ifindex;
+                int ifindex = mdns_answer_item_ifindex(sb, item);
 
-                if (dns_service_match_and_update(sb->dns_services, item->rr, owner_family, item->until))
+                r = dns_service_match_and_update(sb->dns_services, item->rr, owner_family, ifindex, item->until);
+                if (r < 0) {
+                        log_error_errno(r, "Failed to match DNS service: %m");
+                        goto finish;
+                }
+                if (r > 0)
                         continue;
 
                 r = dns_service_split(item->rr->ptr.name, &name, &type, &domain);
@@ -350,9 +420,6 @@ int mdns_manage_services_answer(DnsServiceBrowser *sb, DnsAnswer *answer, int ow
 
                 if (!type)
                         continue;
-
-                /* Prefer the per-item ifindex, fall back to the service browser's ifindex */
-                ifindex = item->ifindex > 0 ? item->ifindex : sb->ifindex;
 
                 r = dns_add_new_service(sb, item->rr, owner_family, ifindex, item->until);
                 if (r < 0) {
@@ -402,7 +469,12 @@ int mdns_manage_services_answer(DnsServiceBrowser *sb, DnsAnswer *answer, int ow
                 if (service->family != owner_family)
                         continue;
 
-                if (dns_answer_contains(answer, service->rr))
+                r = mdns_answer_contains_service(sb, answer, service);
+                if (r < 0) {
+                        log_error_errno(r, "Failed to match DNS answer against service list: %m");
+                        goto finish;
+                }
+                if (r > 0)
                         continue;
 
                 r = dns_service_split(service->rr->ptr.name, &name, &type, &domain);
@@ -487,10 +559,21 @@ int mdns_browser_revisit_cache(DnsServiceBrowser *sb, int owner_family) {
         assert(sb);
         assert(sb->manager);
 
-        /* ifindex=0 means "all interfaces" */
+        /* ifindex=0 means "all interfaces". Collect the cached answers from
+         * every matching mDNS scope into a single combined answer and reconcile
+         * once. Reconciling per-scope would be wrong: mdns_manage_services_answer()
+         * derives removals by diffing the browser's global service list against
+         * the answer it is handed, so a single scope's answer would spuriously
+         * "remove" (and then, on the next scope/pass, re-"add") services that are
+         * still present on other interfaces — resulting in a continuous
+         * added/removed event flap for services seen on more than the current
+         * scope. */
         if (sb->ifindex == 0) {
+                _cleanup_(dns_answer_unrefp) DnsAnswer *combined = NULL;
+
                 LIST_FOREACH(scopes, scope, sb->manager->dns_scopes) {
                         _cleanup_(dns_answer_unrefp) DnsAnswer *answer = NULL;
+                        DnsAnswerItem *item;
 
                         if (scope->protocol != DNS_PROTOCOL_MDNS)
                                 continue;
@@ -513,11 +596,24 @@ int mdns_browser_revisit_cache(DnsServiceBrowser *sb, int owner_family) {
                                 return log_error_errno(r, "Failed to look up DNS cache for service browser key on scope %s: %m",
                                                        dns_scope_ifname(scope) ?: "global");
 
-                        r = mdns_manage_services_answer(sb, answer, owner_family);
-                        if (r < 0)
-                                return log_error_errno(r, "Failed to manage mDNS services after cache lookup on scope %s: %m",
-                                                       dns_scope_ifname(scope) ?: "global");
+                        /* Merge preserving each item's ifindex, flags, rrsig and
+                         * cache-expiry 'until'. (dns_answer_extend()/merge() would
+                         * reset 'until' to USEC_INFINITY, which would skew the RFC
+                         * 6762 §5.2 TTL-maintenance schedule that
+                         * mdns_manage_services_answer() derives from item->until.) */
+                        DNS_ANSWER_FOREACH_ITEM(item, answer) {
+                                r = dns_answer_add_extend_full(&combined, item->rr, item->ifindex,
+                                                               item->flags, item->rrsig, item->until);
+                                if (r < 0)
+                                        return log_error_errno(r, "Failed to merge mDNS cache answer from scope %s: %m",
+                                                               dns_scope_ifname(scope) ?: "global");
+                        }
                 }
+
+                r = mdns_manage_services_answer(sb, combined, owner_family);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to manage mDNS services after cache lookup for all interfaces: %m");
+
                 return 0;
         }
 
@@ -630,27 +726,30 @@ static int mdns_next_query_schedule(sd_event_source *s, uint64_t usec, void *use
         assert(userdata);
         assert_se(sb = dns_service_browser_ref(userdata));
 
-        /* Enable the answer from the cache for the very first query */
-        if (sb->delay == 0)
-                SET_FLAG(sb->flags, SD_RESOLVED_NO_CACHE, false);
+        /* If the varlink connection has a userdata, then that means the previous query has not been finished. */
+        if (!sd_varlink_get_userdata(sb->link)) {
 
-        /* Set the flag indicating that the query is continuous.
-         * RFC 6762 Section 5.2 outlines timing requirements for continuous queries.
-         */
-        sb->flags |= SD_RESOLVED_QUERY_CONTINUOUS;
+                /* Enable the answer from the cache for the very first query */
+                if (sb->delay == 0)
+                        SET_FLAG(sb->flags, SD_RESOLVED_NO_CACHE, false);
 
-        r = dns_query_new(sb->manager, &q, sb->question_utf8, sb->question_idna, NULL, sb->ifindex, sb->flags);
-        if (r < 0)
-                return log_error_errno(r, "Failed to create new DNS query: %m");
+                /* Set the flag indicating that the query is continuous.
+                 * RFC 6762 Section 5.2 outlines timing requirements for continuous queries. */
+                sb->flags |= SD_RESOLVED_QUERY_CONTINUOUS;
 
-        q->complete = mdns_browse_service_query_complete;
-        q->service_browser_request = dns_service_browser_ref(sb);
-        q->varlink_request = sd_varlink_ref(sb->link);
-        sd_varlink_set_userdata(sb->link, q);
+                r = dns_query_new(sb->manager, &q, sb->question_utf8, sb->question_idna, NULL, sb->ifindex, sb->flags);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to create new DNS query: %m");
 
-        r = dns_query_go(q);
-        if (r < 0)
-                return log_error_errno(r, "Failed to send DNS query: %m");
+                q->complete = mdns_browse_service_query_complete;
+                q->service_browser_request = dns_service_browser_ref(sb);
+                q->varlink_request = sd_varlink_ref(sb->link);
+                sd_varlink_set_userdata(sb->link, q);
+
+                r = dns_query_go(q);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to send DNS query: %m");
+        }
 
         /* Calculate the next query delay */
         sb->delay = mdns_calculate_next_query_delay(sb->delay);
@@ -714,6 +813,10 @@ int dns_subscribe_browse_service(
 
         assert(m);
         assert(link);
+
+        /* Refuse multiple requests. */
+        if (hashmap_contains(m->dns_service_browsers, link))
+                return -EBUSY;
 
         if (ifindex < 0)
                 return sd_varlink_error_invalid_parameter_name(link, "ifindex");

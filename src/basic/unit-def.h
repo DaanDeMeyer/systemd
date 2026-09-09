@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 #pragma once
 
-#include "basic-forward.h"
+#include "forward.h"
 
 /* The enum order is used to order unit jobs in the job queue
  * when other criteria (cpu weight, nice level) are identical.
@@ -132,6 +132,7 @@ typedef enum ServiceState {
         SERVICE_START,
         SERVICE_START_POST,
         SERVICE_RUNNING,
+        SERVICE_RUNNING_REVALIDATING,   /* Temporarily waiting for the D-Bus name to reappear */
         SERVICE_EXITED,                 /* Nothing is running anymore, but RemainAfterExit is true hence this is OK */
         SERVICE_REFRESH_EXTENSIONS,     /* Refreshing extensions for a reload request */
         SERVICE_REFRESH_CREDENTIALS,    /* ditto, but for credentials */

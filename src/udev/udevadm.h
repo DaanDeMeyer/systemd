@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
-#include "shared-forward.h"
+#include "forward.h"
+
+extern PagerFlags arg_pager_flags;
 
 int verb_cat_main(int argc, char *argv[], uintptr_t _data, void *userdata);
 int verb_info_main(int argc, char *argv[], uintptr_t _data, void *userdata);
@@ -15,5 +17,3 @@ int verb_builtin_main(int argc, char *argv[], uintptr_t _data, void *userdata);
 int verb_verify_main(int argc, char *argv[], uintptr_t _data, void *userdata);
 int verb_wait_main(int argc, char *argv[], uintptr_t _data, void *userdata);
 int verb_lock_main(int argc, char *argv[], uintptr_t _data, void *userdata);
-
-int print_version(void);

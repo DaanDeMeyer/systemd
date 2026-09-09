@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 #pragma once
 
-#include "basic-forward.h"
+#include "forward.h"
 
 #include "../fundamental/strv.h"   /* IWYU pragma: export */
 
@@ -120,9 +120,9 @@ char** strv_split_newlines(const char *s);
  * string in the vector is an empty string. */
 int strv_split_colon_pairs(char ***t, const char *s);
 
-char* strv_join_full(char * const *l, const char *separator, const char *prefix, bool escape_separator);
+char* strv_join_full(char * const *l, const char *separator, const char *prefix);
 static inline char *strv_join(char * const *l, const char *separator) {
-        return strv_join_full(l, separator, NULL, false);
+        return strv_join_full(l, separator, NULL);
 }
 
 bool strv_overlap(char * const *a, char * const *b) _pure_;

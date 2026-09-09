@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 #pragma once
 
-#include "sd-forward.h"
+#include "forward.h"
+
+int event_source_inherit_fiber_priority(sd_event_source *s);
 
 int future_new_io(sd_event *e, int fd, uint32_t events, sd_future **ret);
 int future_new_time(sd_event *e, clockid_t clock, uint64_t usec, uint64_t accuracy, int result, sd_future **ret);

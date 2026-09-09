@@ -16,7 +16,7 @@ if conf.get('ENABLE_SYSUSERS') == 1
                      env : test_env,
                      suite : 'sysusers')
 
-                if have_standalone_binaries
+                if 'systemd-sysusers.standalone' in executables_by_name
                         exe = executables_by_name.get('systemd-sysusers.standalone')
                         test('test-sysusers.standalone',
                              test_sysusers_sh,
@@ -85,7 +85,7 @@ if want_tests != 'false' and conf.get('ENABLE_TMPFILES') == 1
              depends : exe,
              suite : 'tmpfiles')
 
-        if have_standalone_binaries
+        if 'systemd-tmpfiles.standalone' in executables_by_name
                 exe = executables_by_name.get('systemd-tmpfiles.standalone')
                 test('test-systemd-tmpfiles.standalone',
                      test_systemd_tmpfiles_py,
@@ -265,7 +265,7 @@ if want_tests != 'false' and conf.get('ENABLE_KERNEL_INSTALL') == 1
         args = [kernel_install.full_path(), loaderentry_install.full_path(), uki_copy_install]
         deps = [kernel_install, loaderentry_install]
         if want_ukify and boot_stubs.length() > 0
-                args += [ukify.full_path(), ukify_install.full_path(), boot_stubs[0]]
+                args += [ukify.full_path(), ukify_install.full_path(), test_ukify_install_py, boot_stubs[0]]
                 deps += [ukify, ukify_install, boot_stubs[0]]
         endif
 
@@ -279,9 +279,9 @@ endif
 
 ############################################################
 
-if want_tests != 'false' and pyelftools.found()
-        test_dlopen_note_py = files('test-dlopen-note.py')
+test_dlopen_note_py = files('test-dlopen-note.py')
 
+if want_dlopen_tests
         foreach name, exe : executables_by_name
                 if name.endswith('.static') or name.endswith('.shared')
                         continue

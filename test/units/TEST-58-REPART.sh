@@ -94,6 +94,108 @@ else
     exit 1
 fi
 
+testcase_cow() {
+    local attrs cow_image default_nocow defs image imgs nocow_image probe
+
+    defs="$(mktemp --directory "/tmp/test-repart.defs.XXXXXXXXXX")"
+    imgs="$(mktemp --directory "/var/tmp/test-repart.imgs.XXXXXXXXXX")"
+    # shellcheck disable=SC2064
+    trap "rm -rf '$defs' '$imgs'" RETURN
+
+    # Skip the checks entirely if the underlying filesystem does not support the attribute.
+    if ! chattr -C "$imgs"; then
+        echo "NOCOW is not supported on $imgs, skipping tests"
+        return
+    fi
+
+    probe="$imgs/probe"
+    touch "$probe"
+    if ! chattr +C "$probe"; then
+        echo "NOCOW is not supported on $imgs, skipping tests"
+        return
+    fi
+    if ! chattr -C "$probe"; then
+        echo "COW is not supported on $imgs, skipping tests"
+        return
+    fi
+    rm "$probe"
+
+    chattr +C "$imgs"
+
+    image="$imgs/inherit-nocow.raw"
+    systemd-repart --offline="$OFFLINE" \
+                   --definitions="$defs" \
+                   --empty=create \
+                   --size=16M \
+                   --cow=auto \
+                   --dry-run=no \
+                   "$image"
+
+    attrs="$(lsattr -d -- "$image")"
+    assert_neq "$attrs" ""
+    read -r attrs _ <<<"$attrs"
+    assert_in "C" "$attrs"
+
+    cow_image="$imgs/cow.raw"
+    systemd-repart --offline="$OFFLINE" \
+                   --definitions="$defs" \
+                   --empty=create \
+                   --size=16M \
+                   --cow=yes \
+                   --dry-run=no \
+                   "$cow_image"
+
+    attrs="$(lsattr -d -- "$cow_image")"
+    assert_neq "$attrs" ""
+    read -r attrs _ <<<"$attrs"
+    assert_not_in "C" "$attrs"
+
+    chattr -C "$imgs"
+
+    probe="$imgs/probe"
+    touch "$probe"
+    attrs="$(lsattr -d -- "$probe")"
+    assert_neq "$attrs" ""
+    read -r attrs _ <<<"$attrs"
+    if [[ "$attrs" == *C* ]]; then
+        default_nocow=1
+    else
+        default_nocow=0
+    fi
+    rm "$probe"
+
+    image="$imgs/inherit-cow.raw"
+    systemd-repart --offline="$OFFLINE" \
+                   --definitions="$defs" \
+                   --empty=create \
+                   --size=16M \
+                   --dry-run=no \
+                   "$image"
+
+    attrs="$(lsattr -d -- "$image")"
+    assert_neq "$attrs" ""
+    read -r attrs _ <<<"$attrs"
+    if (( default_nocow )); then
+        assert_in "C" "$attrs"
+    else
+        assert_not_in "C" "$attrs"
+    fi
+
+    nocow_image="$imgs/nocow.raw"
+    systemd-repart --offline="$OFFLINE" \
+                   --definitions="$defs" \
+                   --empty=create \
+                   --size=16M \
+                   --cow=no \
+                   --dry-run=no \
+                   "$nocow_image"
+
+    attrs="$(lsattr -d -- "$nocow_image")"
+    assert_neq "$attrs" ""
+    read -r attrs _ <<<"$attrs"
+    assert_in "C" "$attrs"
+}
+
 testcase_basic() {
     local defs imgs output
     local loop volume
@@ -147,7 +249,7 @@ PaddingMinBytes=92M
 EOF
 
     systemd-repart --definitions="$defs" \
-                   --dry-run=yes \
+                   -n \
                    --seed="$seed" \
                    --include-partitions=home,swap \
                    "-"
@@ -370,7 +472,7 @@ label-id: 1D2CE291-7CCE-4F7D-BC83-FDB49AD74EBD
 device: $imgs/zzz
 unit: sectors
 first-lba: 2048
-last-lba: 6422494
+last-lba: 6422487
 $imgs/zzz1 : start=        2048, size=      591856, type=933AC7E1-2EB4-4F13-B844-0E14E2AEF915, uuid=4980595D-D74A-483A-AA9E-9903879A0EE5, name=\"home-first\", attrs=\"GUID:59\"
 $imgs/zzz2 : start=      593904, size=      591856, type=${root_guid}, uuid=${root_uuid}, name=\"root-${architecture}\", attrs=\"GUID:59\"
 $imgs/zzz3 : start=     1185760, size=      591864, type=${root_guid}, uuid=${root_uuid2}, name=\"root-${architecture}-2\", attrs=\"GUID:59\"
@@ -434,7 +536,7 @@ label-id: 1D2CE291-7CCE-4F7D-BC83-FDB49AD74EBD
 device: $imgs/zzz
 unit: sectors
 first-lba: 2048
-last-lba: 6553566
+last-lba: 6553559
 $imgs/zzz1 : start=        2048, size=      591856, type=933AC7E1-2EB4-4F13-B844-0E14E2AEF915, uuid=4980595D-D74A-483A-AA9E-9903879A0EE5, name=\"home-first\", attrs=\"GUID:59\"
 $imgs/zzz2 : start=      593904, size=      591856, type=${root_guid}, uuid=${root_uuid}, name=\"root-${architecture}\", attrs=\"GUID:59\"
 $imgs/zzz3 : start=     1185760, size=      591864, type=${root_guid}, uuid=${root_uuid2}, name=\"root-${architecture}-2\", attrs=\"GUID:59\"
@@ -566,6 +668,51 @@ EOF
     assert_in "$imgs/copy_to1 : start=        2048, size=       20480, type=${root_guid}," "$output"
     assert_in "$imgs/copy_to2 : start=       22528, size=       10240, type=${xbootldr_guid}," "$output"
     assert_in "$imgs/copy_to3 : start=       32768, size=       90072, type=${esp_guid}," "$output"
+}
+
+testcase_size_auto_with_grain_size() {
+    local defs imgs output
+
+    defs="$(mktemp --directory "/tmp/test-repart.defs.XXXXXXXXXX")"
+    imgs="$(mktemp --directory "/var/tmp/test-repart.imgs.XXXXXXXXXX")"
+    # shellcheck disable=SC2064
+    trap "rm -rf '$defs' '$imgs'" RETURN
+    chmod 0755 "$defs"
+
+    tee "$defs/01-esp.conf" <<EOF
+[Partition]
+Type=esp
+SizeMinBytes=10M
+EOF
+
+    tee "$defs/02-usr.conf" <<EOF
+[Partition]
+Type=usr-${architecture}
+SizeMinBytes=10M
+EOF
+
+    tee "$defs/03-root.conf" <<EOF
+[Partition]
+Type=root-${architecture}
+SizeMinBytes=10M
+EOF
+
+    systemd-repart --offline="$OFFLINE" \
+                   --empty=create \
+                   --size=auto \
+                   --definitions="$defs" \
+                   --seed="$seed" \
+                   --dry-run=no \
+                   --grain-size=2097152 \
+                   "$imgs/auto"
+
+    output=$(sfdisk --dump "$imgs/auto")
+
+    assert_in "first-lba: 2048" "$output"
+    assert_in "last-lba: 65535" "$output"
+    assert_in "$imgs/auto1 : start=        4096, size=       20480, type=${esp_guid}," "$output"
+    assert_in "$imgs/auto2 : start=       24576, size=       20480, type=${usr_guid}," "$output"
+    assert_in "$imgs/auto3 : start=       45056, size=       20480, type=${root_guid}," "$output"
 }
 
 testcase_dropin() {
@@ -1409,6 +1556,168 @@ EOF
     veritysetup dump "${loop}p2" | grep 'Data blocks:' | grep "$data_verity_blocks" >/dev/null
 }
 
+testcase_verity_encrypt() {
+    local defs imgs output loop drh hrh part_size dm_devno verity_dep
+
+    if ( . /etc/os-release && [[ "$ID" == "postmarketos" ]] ); then
+        echo "Skipping verity+encrypt test on postmarketOS."
+        return
+    fi
+
+    defs="$(mktemp --directory "/tmp/test-repart.defs.XXXXXXXXXX")"
+    imgs="$(mktemp --directory "/var/tmp/test-repart.imgs.XXXXXXXXXX")"
+    # shellcheck disable=SC2064
+    trap "rm -rf '$defs' '$imgs'" RETURN
+    chmod 0755 "$defs"
+
+    echo "*** dm-verity + LUKS2 (verity envelope around encrypted data) ***"
+
+    echo -n "wetterfrosch" >"$imgs/key"
+
+    # Encrypting verity hash partitions must be refused
+    tee "$defs/verity-data.conf" <<EOF
+[Partition]
+Type=root-${architecture}
+CopyFiles=${defs}
+Verity=data
+VerityMatchKey=root
+Encrypt=key-file
+SizeMaxBytes=1G
+EOF
+
+    tee "$defs/verity-hash.conf" <<EOF
+[Partition]
+Type=root-${architecture}-verity
+Verity=hash
+VerityMatchKey=root
+Encrypt=key-file
+EOF
+
+    (! systemd-repart --offline="$OFFLINE" \
+                      --definitions="$defs" \
+                      --seed="$seed" \
+                      --dry-run=yes \
+                      --empty=create \
+                      --size=auto \
+                      --key-file="$imgs/key" \
+                      "$imgs/refused")
+
+    # Minimize= on the hash partition of an encrypted data partition must be refused. Set Minimize= on the
+    # data partition as well, so that the generic "data partition does not set CopyBlocks= or Minimize="
+    # check doesn't fire first and the encryption-specific check is actually reached.
+    tee "$defs/verity-data.conf" <<EOF
+[Partition]
+Type=root-${architecture}
+Format=ext4
+CopyFiles=${defs}
+Verity=data
+VerityMatchKey=root
+Encrypt=key-file
+Minimize=guess
+SizeMaxBytes=1G
+EOF
+
+    tee "$defs/verity-hash.conf" <<EOF
+[Partition]
+Type=root-${architecture}-verity
+Verity=hash
+VerityMatchKey=root
+Minimize=yes
+EOF
+
+    (! systemd-repart --offline="$OFFLINE" \
+                      --definitions="$defs" \
+                      --seed="$seed" \
+                      --dry-run=yes \
+                      --empty=create \
+                      --size=auto \
+                      --key-file="$imgs/key" \
+                      "$imgs/refused") |& grep "Minimize= cannot be set for verity hash partitions whose data partition is encrypted" >/dev/null
+
+    # Now a valid combination: the hash partition is sized via SizeMaxBytes= of the data partition
+    tee "$defs/verity-data.conf" <<EOF
+[Partition]
+Type=root-${architecture}
+CopyFiles=${defs}
+Verity=data
+VerityMatchKey=root
+Encrypt=key-file
+SizeMaxBytes=1G
+EOF
+
+    tee "$defs/verity-hash.conf" <<EOF
+[Partition]
+Type=root-${architecture}-verity
+Verity=hash
+VerityMatchKey=root
+EOF
+
+    output=$(systemd-repart --offline="$OFFLINE" \
+                            --definitions="$defs" \
+                            --seed="$seed" \
+                            --dry-run=no \
+                            --empty=create \
+                            --size=auto \
+                            --key-file="$imgs/key" \
+                            --json=pretty \
+                            "$imgs/verity-encrypt")
+
+    drh=$(jq -r ".[] | select(.type == \"root-${architecture}\") | .roothash" <<<"$output")
+    hrh=$(jq -r ".[] | select(.type == \"root-${architecture}-verity\") | .roothash" <<<"$output")
+
+    assert_neq "$drh" "null"
+    assert_eq "$drh" "$hrh"
+
+    if systemd-detect-virt --quiet --container; then
+        echo "Skipping verity+encrypt test dissect part in container."
+        return
+    fi
+
+    loop="$(systemd-dissect --attach "$imgs/verity-encrypt")"
+
+    # Make sure the loopback device gets cleaned up
+    # shellcheck disable=SC2064
+    trap "rm -rf '$defs' '$imgs' ; systemd-dissect --detach '$loop'" RETURN ERR
+
+    # The data partition must contain LUKS ciphertext as its outermost layer ...
+    blkid --output value --match-tag TYPE "${loop}p1" | grep -x crypto_LUKS
+
+    # ... and the verity hash data must cover exactly that ciphertext
+    veritysetup verify "${loop}p1" "${loop}p2" "$drh"
+
+    # Dissection must set up verity as the outer envelope and LUKS inside of it. The LUKS passphrase is
+    # picked up via the dissect.passphrase credential.
+    mkdir -p "$imgs/creds"
+    echo -n "wetterfrosch" >"$imgs/creds/dissect.passphrase"
+
+    systemd-dissect --root-hash "$drh" "$imgs/verity-encrypt"
+    systemd-dissect --root-hash "$drh" --validate --image-policy "root=encrypted+verity" "$imgs/verity-encrypt"
+    # A policy that doesn't allow encryption must be refused
+    (! systemd-dissect --root-hash "$drh" --validate --image-policy "root=verity" "$imgs/verity-encrypt")
+
+    CREDENTIALS_DIRECTORY="$imgs/creds" systemd-dissect --root-hash "$drh" -M "$imgs/verity-encrypt" "$imgs/mnt"
+
+    # shellcheck disable=SC2064
+    trap "umount --quiet --recursive '$imgs/mnt' || : ; rm -rf '$defs' '$imgs' ; systemd-dissect --detach '$loop'" RETURN ERR
+
+    # Check that both DM layers are stacked as expected: the mounted device is a LUKS volume backed by a
+    # dm-verity device
+    dm_devno=$(findmnt --noheadings --output MAJ:MIN "$imgs/mnt" | tr -d ' ')
+    [[ "$(dmsetup table -j "${dm_devno%%:*}" -m "${dm_devno##*:}" | cut -d' ' -f3)" == "crypt" ]]
+    verity_dep=$(dmsetup deps -o devname -j "${dm_devno%%:*}" -m "${dm_devno##*:}" | sed 's/.*(\(.*\))/\1/')
+    [[ "$(dmsetup table "/dev/mapper/$verity_dep" | cut -d' ' -f3)" == "verity" ]]
+
+    # The copied-in files must be intact
+    cmp "$defs/verity-data.conf" "$imgs/mnt$defs/verity-data.conf"
+
+    systemd-dissect -U "$imgs/mnt"
+
+    # Now corrupt a block in the middle of the encrypted data partition and check that verification fails
+    part_size=$(blockdev --getsize64 "${loop}p1")
+    dd if=/dev/urandom of="${loop}p1" bs=4096 count=1 seek=$(( part_size / 2 / 4096 )) oflag=direct conv=notrunc
+    (! veritysetup verify "${loop}p1" "${loop}p2" "$drh")
+}
+
 testcase_exclude_files() {
     local defs imgs root output
 
@@ -1857,7 +2166,7 @@ EOF
 }
 
 testcase_make_symlinks() {
-    local defs imgs output
+    local defs imgs output epoch
 
     if systemd-detect-virt --quiet --container; then
         echo "Skipping MakeSymlinks= test in container."
@@ -1882,7 +2191,13 @@ MakeSymlinks=/dir/foo-%a:/bar-%a
 MakeSymlinks=/dir/bar-%a:../bar-%a
 EOF
 
-    systemd-repart --offline="$OFFLINE" \
+    # Build with an epoch, so that this also covers do_make_symlinks()' time stamping. It has to
+    # stamp the symlink itself and repair the directory it lands in, because creating an entry there
+    # bumps that directory back to the wall clock.
+    epoch=1700000000
+
+    env SOURCE_DATE_EPOCH="$epoch" \
+        systemd-repart --offline="$OFFLINE" \
                    --definitions="$defs" \
                    --empty=create \
                    --size=1G \
@@ -1896,6 +2211,12 @@ EOF
     assert_eq "$(readlink "$imgs/mnt/dir/foo")" "/bar"
     assert_eq "$(readlink "$imgs/mnt/dir/foo-${architecture}")" "/bar-${architecture}"
     assert_eq "$(readlink "$imgs/mnt/dir/bar-${architecture}")" "../bar-${architecture}"
+
+    # the symlink's own mtime (no -L)
+    assert_eq "$(stat -c %Y "$imgs/mnt/dir/foo")" "$epoch"
+    # a MakeDirectories= dir, stamped with the epoch and then bumped by the symlinks below it.
+    assert_eq "$(stat -c %Y "$imgs/mnt/dir")" "$epoch"
+
     systemd-dissect -U "$imgs/mnt"
 }
 
@@ -2447,6 +2768,123 @@ EOF
     cmp "$imgs/test1.img" "$imgs/test2.img"
 }
 
+testcase_vfat_reproducibility() {
+    local defs imgs img dot_efi dot_linux
+
+    if ! command -v mdir >/dev/null; then
+        echo "Skipping vfat reproducibility test, mtools is not installed."
+        return 0
+    fi
+
+    defs="$(mktemp --directory "/tmp/test-repart.defs.XXXXXXXXXX")"
+    imgs="$(mktemp --directory "/var/tmp/test-repart.imgs.XXXXXXXXXX")"
+    # shellcheck disable=SC2064
+    trap "rm -rf '$defs' '$imgs'" RETURN
+
+    tee "$defs/esp.conf" <<EOF
+[Partition]
+Type=esp
+Format=vfat
+CopyFiles=/:/
+EOF
+
+    # $SOURCE_DATE_EPOCH is a clamp, not an override, so put one file on either side of it to cover
+    # both directions.
+    mkdir -p "$imgs/tree/EFI/Linux"
+    echo old >"$imgs/tree/EFI/Linux/old.efi"
+    echo new >"$imgs/tree/EFI/Linux/new.efi"
+    touch --date=@1600000000 "$imgs/tree/EFI/Linux/old.efi"
+    touch --date=@1750000000 "$imgs/tree/EFI/Linux/new.efi"
+
+    # The timestamps as mdir(1) reports them.
+    local -r time_epoch="2023-11-14  22:13"   # $SOURCE_DATE_EPOCH below, i.e. @1700000000
+    local -r time_old="2020-09-13  12:26"     # old.efi's mtime, before the epoch
+    local -r time_new="2025-06-15  15:06"     # new.efi's mtime, after the epoch
+
+    # Build $1 from the tree and set $img to it, in the "file@@offset" form mdir(1) wants. The
+    # remaining arguments are passed to env(1), to control $SOURCE_DATE_EPOCH.
+    build_image() {
+        local name="$1" output offset
+        shift
+
+        output=$(env "$@" \
+            systemd-repart \
+            --offline="$OFFLINE" \
+            --definitions="$defs" \
+            --empty=create \
+            --size=auto \
+            --seed="$seed" \
+            --dry-run=no \
+            --root="$imgs/tree" \
+            --json=pretty \
+            "$imgs/$name")
+
+        offset=$(jq -r '.[0].offset' <<<"$output")
+        img="$imgs/$name@@$offset"
+
+        # dump listing for debugging
+        fat_entry -/ ::/
+    }
+
+    # Print $img's mdir(1) entry for the given path. mdir lists a directory's contents; a trailing `*`
+    # gets the directory's own entry instead. Insensitive path matching, thus works with mtools' 8.3
+    # lower case and kernel vfat's upper case names.
+    fat_entry() {
+        env MTOOLS_SKIP_CHECK=1 TZ=UTC mdir -i "$img" "$@"
+    }
+
+    # Same, for the "." entry of directory $1, which cannot be addressed directly.
+    fat_dot_entry() {
+        fat_entry "$1" | grep -E '^\. +<DIR>'
+    }
+
+    build_image epoch.img SOURCE_DATE_EPOCH=1700000000
+
+    # The directories and the file newer than the epoch are clamped down to it, ...
+    assert_in "$time_epoch" "$(fat_entry '::/EFI*')"
+    assert_in "$time_epoch" "$(fat_entry '::/EFI/Linux*')"
+    assert_in "$time_epoch" "$(fat_entry '::/EFI/Linux/new.efi')"
+    # ... while the older one keeps its own mtime.
+    assert_in "$time_old" "$(fat_entry '::/EFI/Linux/old.efi')"
+
+    # "." and ".." behave differently
+    dot_efi=$(fat_dot_entry '::/EFI')
+    dot_linux=$(fat_dot_entry '::/EFI/Linux')
+    if [[ "$OFFLINE" == "yes" ]]; then
+        # mmd creates them and respects SOURCE_DATE_EPOCH
+        assert_in "$time_epoch" "$dot_efi"
+        assert_in "$time_epoch" "$dot_linux"
+    else
+        # The kernel's vfat driver creates them with wallclock mtime. Our utimensat()
+        # afterwards only rewrites the directory's entry in its *parent*, never this pair.
+        # Out of reach from userspace, remains unreproducible. Just log them.
+        echo "'.' entries carry the wall clock, as expected online: $dot_efi / $dot_linux"
+    fi
+
+    # Without an epoch, both files keep their own mtime.
+    build_image wallclock.img -u SOURCE_DATE_EPOCH
+
+    assert_in "$time_new" "$(fat_entry '::/EFI/Linux/new.efi')"
+    assert_in "$time_old" "$(fat_entry '::/EFI/Linux/old.efi')"
+
+    # A value we cannot parse is dropped rather than passed on
+    build_image bogus.img SOURCE_DATE_EPOCH=99999999999999999999
+
+    assert_in "$time_new" "$(fat_entry '::/EFI/Linux/new.efi')"
+    assert_in "$time_old" "$(fat_entry '::/EFI/Linux/old.efi')"
+
+    # SOURCE_DATE_EPOCH in hex - we do parse that, but mtools doesn't
+    build_image hex.img SOURCE_DATE_EPOCH=0x6553F100
+
+    assert_in "$time_epoch" "$(fat_entry '::/EFI*')"
+
+    # Note the images still are not reproducible byte for byte: the volume label entry carries
+    # mkfs.fat's wall clock, in *both* modes, and that needs a dosfstools with $SOURCE_DATE_EPOCH
+    # support (https://github.com/dosfstools/dosfstools/commit/8da7bc93315c, release > 4.2). Once
+    # that lands, offline mode can move to a `cmp` like in testcase_ext_reproducibility; online
+    # mode cannot, because of the "." and ".." entries above.
+}
+
 testcase_luks2_keyhash() {
     local defs imgs output root
 
@@ -2562,6 +3000,35 @@ EOF
     systemd-cryptsetup detach "$volume"
 
     losetup -d "$loop"
+}
+
+testcase_generate_fstab_dry_run() {
+    local defs root
+
+    defs="$(mktemp --directory "/tmp/test-repart.defs.XXXXXXXXXX")"
+    root="$(mktemp --directory "/var/test-repart.root.XXXXXXXXXX")"
+    # shellcheck disable=SC2064
+    trap "rm -rf '$defs' '$root'" RETURN
+    chmod 0755 "$defs"
+
+    echo "*** testcase for skipping generated fstab in dry-run mode ***"
+
+    mkdir -p "$root/etc"
+    tee "$defs/root.conf" <<EOF
+[Partition]
+Type=root
+Format=ext4
+MountPoint=/
+EOF
+
+    systemd-repart --pretty=yes \
+                   --definitions "$defs" \
+                   --dry-run=yes \
+                   --seed="$seed" \
+                   --generate-fstab="$root/etc/fstab" \
+                   -
+
+    test ! -e "$root/etc/fstab"
 }
 
 testcase_encrypted_volume_empty_name() {
@@ -2821,6 +3288,81 @@ EOF
     assert_in "$imgs/leftover2.img1 : start=        2048, size=       20480, type=$xbootldr_guid," "$output"
     assert_in "$imgs/leftover2.img2 : start=       22528, size=        4096, type=$usr_guid," "$output"
     assert_in "$imgs/leftover2.img3 : start=       26624, size=       24536, type=$esp_guid," "$output"
+}
+
+testcase_partition_number_gap() {
+    local defs imgs image output before after
+
+    defs="$(mktemp --directory "/tmp/test-repart.defs.XXXXXXXXXX")"
+    imgs="$(mktemp --directory "/var/tmp/test-repart.imgs.XXXXXXXXXX")"
+    # shellcheck disable=SC2064
+    trap "rm -rf '$defs' '$imgs'" RETURN
+    chmod 0755 "$defs"
+
+    image="$imgs/gap.img"
+
+    tee "$defs/10-a.conf" <<EOF
+[Partition]
+Type=linux-generic
+Label=a
+SizeMinBytes=20M
+SizeMaxBytes=20M
+EOF
+
+    tee "$defs/20-b.conf" <<EOF
+[Partition]
+Type=linux-generic
+Label=b
+SizeMinBytes=10M
+SizeMaxBytes=10M
+EOF
+
+    # Initially create two partitions with consecutive partition numbers.
+    systemd-repart --offline="$OFFLINE" \
+                   --definitions="$defs" \
+                   --seed="$seed" \
+                   --empty=create \
+                   --size=64M \
+                   --dry-run=no \
+                   "$image"
+
+    output="$(sfdisk -d "$image")"
+    assert_in "${image}1 :" "$output"
+    assert_in "${image}2 :" "$output"
+
+    # Remove the first partition, leaving partition number 1 unused while
+    # partition number 2 remains occupied.
+    sfdisk --delete "$image" 1
+
+    output="$(sfdisk -d "$image")"
+    assert_not_in "${image}1 :" "$output"
+    assert_in "${image}2 :" "$output"
+
+    # Repart should append the new partition after the highest existing
+    # partition of the same type instead of filling the lower-numbered gap.
+    systemd-repart --offline="$OFFLINE" \
+                   --definitions="$defs" \
+                   --seed="$seed" \
+                   --dry-run=no \
+                   "$image"
+
+    output="$(sfdisk -d "$image")"
+    assert_not_in "${image}1 :" "$output"
+    assert_in "${image}2 : start=       43008, size=       40960, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4," "$output"
+    assert_in "${image}3 : start=        2048, size=       20480, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4," "$output"
+
+    # A subsequent invocation should not rematch the definitions and modify
+    # the partition table again.
+    before="$output"
+
+    systemd-repart --offline="$OFFLINE" \
+                   --definitions="$defs" \
+                   --seed="$seed" \
+                   --dry-run=no \
+                   "$image"
+
+    after="$(sfdisk -d "$image")"
+    assert_eq "$after" "$before"
 }
 
 OFFLINE="yes"

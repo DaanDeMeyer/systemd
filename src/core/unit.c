@@ -2033,6 +2033,10 @@ int unit_start(Unit *u, ActivationDetails *details) {
                          * the queue */
                         if (slice_concurrency_soft_max_reached(slice, u))
                                 return -EAGAIN; /* Try again, keep in queue */
+
+                        /* Check activating concurrency limit to pace concurrent startups */
+                        if (slice_activating_concurrency_max_reached(slice, u))
+                                return -EAGAIN; /* Try again, keep in queue */
                 }
         }
 
@@ -2713,20 +2717,21 @@ static void unit_check_concurrency_limit(Unit *u) {
         if (!slice)
                 return;
 
-        /* If a unit was stopped, maybe it has pending siblings (or children thereof) that can be started now */
+        /* If a unit was stopped, maybe it has pending siblings (or children thereof) that can be started now.
+         * Walk up the slice hierarchy and re-dispatch for each ancestor that has a limit configured. */
 
-        if (SLICE(slice)->concurrency_soft_max != UINT_MAX) {
-                Unit *sibling;
-                UNIT_FOREACH_DEPENDENCY(sibling, slice, UNIT_ATOM_SLICE_OF) {
-                        if (sibling == u)
-                                continue;
+        for (Unit *s = slice; s; s = UNIT_GET_SLICE(s)) {
+                if (SLICE(s)->concurrency_soft_max != UINT_MAX ||
+                    SLICE(s)->activating_concurrency_max != UINT_MAX) {
+                        Unit *member;
+                        UNIT_FOREACH_DEPENDENCY(member, s, UNIT_ATOM_SLICE_OF) {
+                                if (member == u)
+                                        continue;
 
-                        unit_recursive_add_to_run_queue(sibling);
+                                unit_recursive_add_to_run_queue(member);
+                        }
                 }
         }
-
-        /* Also go up the tree. */
-        unit_check_concurrency_limit(slice);
 }
 
 void unit_notify(Unit *u, UnitActiveState os, UnitActiveState ns, bool reload_success) {
@@ -2882,7 +2887,15 @@ void unit_notify(Unit *u, UnitActiveState os, UnitActiveState ns, bool reload_su
                  * when something BindsTo= to a Type=oneshot unit, as these units go directly from starting to
                  * inactive, without ever entering started.) */
                 unit_submit_to_stop_when_bound_queue(u);
+
+                /* Maybe the activating concurrency limits now allow dispatching of another start job in this slice? */
+                unit_check_concurrency_limit(u);
         }
+
+        /* When a unit leaves the activating state (to deactivating, inactive, or active), it frees up a slot for
+         * ActivatingConcurrencyMax. Re-dispatch queued starts. */
+        if (os == UNIT_ACTIVATING && ns != UNIT_ACTIVATING)
+                unit_check_concurrency_limit(u);
 }
 
 int unit_watch_pidref(Unit *u, const PidRef *pid, bool exclusive) {
@@ -3580,7 +3593,7 @@ static int signal_name_owner_changed_install_handler(sd_bus_message *message, vo
         u->get_name_owner_slot = sd_bus_slot_unref(u->get_name_owner_slot);
 
         if (UNIT_VTABLE(u)->bus_name_owner_change)
-                UNIT_VTABLE(u)->bus_name_owner_change(u, NULL);
+                UNIT_VTABLE(u)->bus_name_owner_change(u, NULL, /* from_signal= */ true);
 
         return 0;
 }
@@ -3599,7 +3612,7 @@ static int signal_name_owner_changed(sd_bus_message *message, void *userdata, sd
         }
 
         if (UNIT_VTABLE(u)->bus_name_owner_change)
-                UNIT_VTABLE(u)->bus_name_owner_change(u, empty_to_null(new_owner));
+                UNIT_VTABLE(u)->bus_name_owner_change(u, empty_to_null(new_owner), /* from_signal= */ true);
 
         return 0;
 }
@@ -3632,8 +3645,11 @@ static int get_name_owner_handler(sd_bus_message *message, void *userdata, sd_bu
                 assert(!isempty(new_owner));
         }
 
+        /* Given we're in a GetNameOwner() refresh, which we issue right after (re)connecting to the broker,
+         * a NULL owner here may simply mean the owning client is still getting its bearings, so treat it as
+         * non-definitive and worth waiting a bit for. */
         if (UNIT_VTABLE(u)->bus_name_owner_change)
-                UNIT_VTABLE(u)->bus_name_owner_change(u, new_owner);
+                UNIT_VTABLE(u)->bus_name_owner_change(u, new_owner, /* from_signal= */ false);
 
         return 0;
 }
@@ -6910,6 +6926,8 @@ int unit_get_exec_quota_stats(Unit *u, ExecContext *c, ExecDirectoryType dt, uin
 
         assert(u);
         assert(c);
+        assert(ret_usage);
+        assert(ret_limit);
 
         if (c->directories[dt].n_items == 0) {
                 *ret_usage = UINT64_MAX;

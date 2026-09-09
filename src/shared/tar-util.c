@@ -79,12 +79,14 @@ static void open_inode_done(OpenInode *of) {
                 of->fd = safe_close(of->fd);
                 of->path = mfree(of->path);
         }
+
         xattr_free_array(of->xattr, of->n_xattr);
+        of->xattr = NULL;
+        of->n_xattr = 0;
+
 #if HAVE_ACL
-        if (of->acl_access)
-                sym_acl_free(of->acl_access);
-        if (of->acl_default)
-                sym_acl_free(of->acl_default);
+        acl_freep(&of->acl_access);
+        acl_freep(&of->acl_default);
 #endif
 }
 
@@ -747,6 +749,10 @@ int tar_x(int input_fd, int tree_fd, TarFlags flags) {
         assert(input_fd >= 0);
         assert(tree_fd >= 0);
 
+        r = dlopen_libarchive(LOG_DEBUG);
+        if (r < 0)
+                return r;
+
         _cleanup_(archive_read_freep) struct archive *a = NULL;
         a = sym_archive_read_new();
         if (!a)
@@ -845,11 +851,10 @@ int tar_x(int input_fd, int tree_fd, TarFlags flags) {
 
                 /* Finalize all inodes we won't need anymore now (go backwards, i.e. close inner fds first) */
                 while (n_open_inodes > i) {
-                        r = open_inode_finalize(open_inodes + n_open_inodes - 1);
+                        n_open_inodes--;
+                        r = open_inode_finalize(open_inodes + n_open_inodes);
                         if (r < 0)
                                 return r;
-
-                        n_open_inodes--;
                 }
 
                 /* And now create all remaining components */
@@ -1083,7 +1088,7 @@ int tar_x(int input_fd, int tree_fd, TarFlags flags) {
         return 0;
 }
 
-static int make_tmpfs(void) {
+int tar_hardlink_db_new(void) {
         /* Creates a tmpfs superblock to store our hardlink db in. We can do this if we run in our own
          * userns, or if we are privileged. This is preferable, since it means the db is cleaned up
          * automatically once we are done. Moreover, since this is a new superblock owned by us, we do not
@@ -1111,6 +1116,7 @@ struct make_archive_data {
         TarFlags flags;
 
         int hardlink_db_fd;
+        bool hardlink_db_fd_owned; /* Whether we allocated the db ourselves, i.e. whether it is ours to close */
         char *hardlink_db_path;
         int have_unique_mount_id;
 };
@@ -1199,7 +1205,7 @@ static int hardlink_lookup(
 
                 /* We first try to create our own superblock, which works if we are in a userns, and which
                  * doesn't require explicit clean-up */
-                d->hardlink_db_fd = make_tmpfs();
+                d->hardlink_db_fd = tar_hardlink_db_new();
                 if (d->hardlink_db_fd < 0) {
                         log_debug_errno(d->hardlink_db_fd, "Failed to allocate tmpfs superblock for hardlink db, falling back to temporary directory: %m");
 
@@ -1216,6 +1222,8 @@ static int hardlink_lookup(
                         if (d->hardlink_db_fd < 0)
                                 return log_error_errno(d->hardlink_db_fd, "Failed to make hardlink database directory: %m");
                 }
+
+                d->hardlink_db_fd_owned = true;
         } else {
                 _cleanup_free_ char *p = NULL;
                 r = readlinkat_malloc(d->hardlink_db_fd, n, &p);
@@ -1585,17 +1593,25 @@ static int archive_item(
 static void make_archive_data_done(struct make_archive_data *d) {
         assert(d);
 
-        if (d->hardlink_db_fd >= 0)
-                (void) rm_rf_children(d->hardlink_db_fd, REMOVE_PHYSICAL, /* root_dev= */ NULL);
+        /* Only tear down a db we allocated ourselves: rm_rf_children() consumes the fd it is given, and one
+         * handed to us by the caller is theirs to close. */
+        if (d->hardlink_db_fd_owned && d->hardlink_db_fd >= 0)
+                (void) rm_rf_children(TAKE_FD(d->hardlink_db_fd), REMOVE_PHYSICAL, /* root_dev= */ NULL);
 
         unlink_and_free(d->hardlink_db_path);
 }
 
-int tar_c(int tree_fd, int output_fd, const char *filename, TarFlags flags) {
+/* The hardlink db fd is borrowed, not consumed: tar_c() neither closes it nor empties it again, so whoever
+ * passed it in stays responsible for both. */
+int tar_c(int tree_fd, int output_fd, const char *filename, int hardlink_db_fd, TarFlags flags) {
         int r;
 
         assert(tree_fd >= 0);
         assert(output_fd >= 0);
+
+        r = dlopen_libarchive(LOG_DEBUG);
+        if (r < 0)
+                return r;
 
         _cleanup_(archive_write_freep) struct archive *a = sym_archive_write_new();
         if (!a)
@@ -1617,7 +1633,7 @@ int tar_c(int tree_fd, int output_fd, const char *filename, TarFlags flags) {
         _cleanup_(make_archive_data_done) struct make_archive_data data = {
                 .archive = a,
                 .flags = flags,
-                .hardlink_db_fd = -EBADF,
+                .hardlink_db_fd = hardlink_db_fd,
                 .have_unique_mount_id = -1,
         };
 
@@ -1648,11 +1664,15 @@ int tar_x(int input_fd, int tree_fd, TarFlags flags) {
         return log_error_errno(SYNTHETIC_ERRNO(EOPNOTSUPP), "libarchive support not available.");
 }
 
-int tar_c(int tree_fd, int output_fd, const char *filename, TarFlags flags) {
+int tar_c(int tree_fd, int output_fd, const char *filename, int hardlink_db_fd, TarFlags flags) {
         assert(tree_fd >= 0);
         assert(output_fd >= 0);
 
         return log_error_errno(SYNTHETIC_ERRNO(EOPNOTSUPP), "libarchive support not available.");
+}
+
+int tar_hardlink_db_new(void) {
+        return log_debug_errno(SYNTHETIC_ERRNO(EOPNOTSUPP), "libarchive support not available.");
 }
 
 #endif

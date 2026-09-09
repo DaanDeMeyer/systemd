@@ -1,12 +1,14 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 #pragma once
 
-#include "basic-forward.h"
+#include "forward.h"
 #include "parse-util.h"
 
 typedef enum PressureType {
         PRESSURE_TYPE_SOME,
         PRESSURE_TYPE_FULL,
+        _PRESSURE_TYPE_MAX,
+        _PRESSURE_TYPE_INVALID = -EINVAL,
 } PressureType;
 
 typedef enum PressureResource {
@@ -50,6 +52,7 @@ static inline const PressureResourceInfo* pressure_resource_get_info(PressureRes
 }
 
 DECLARE_STRING_TABLE_LOOKUP(pressure_resource, PressureResource);
+DECLARE_STRING_TABLE_LOOKUP(pressure_type, PressureType);
 
 /* Default parameters for pressure watch logic in sd-event and PID 1 */
 #define PRESSURE_DEFAULT_TYPE "some"

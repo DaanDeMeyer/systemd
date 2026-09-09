@@ -81,6 +81,9 @@ EFI_ARCHES: list[str] = sum(EFI_ARCH_MAP.values(), [])
 DEFAULT_CONFIG_DIRS = ['/etc/systemd', '/run/systemd', '/usr/local/lib/systemd', '/usr/lib/systemd']
 DEFAULT_CONFIG_FILE = 'ukify.conf'
 
+# https://datatracker.ietf.org/doc/html/rfc5280 ub-common-name; bytes, not chars
+COMMON_NAME_MAX_LEN = 64
+
 
 class Style:
     bold = '\033[0;1;39m' if sys.stderr.isatty() else ''
@@ -291,11 +294,13 @@ class UkifyConfig:
     pcrpkey: Optional[Path]
     pcrsig: Union[str, Path, None]
     join_pcrsig: Optional[Path]
-    phase_path_groups: Optional[list[str]]
+    phase_path_groups: Optional[list[list[str]]]
     policyrefs: Optional[list[str]]
+    sign_initrd_pcrs: bool
     policy_digest: bool
     profile: Optional[str]
     sb_cert: Union[str, Path, None]
+    sb_cert_common_name: Optional[str]
     sb_cert_name: Optional[str]
     sb_cert_validity: int
     sb_certdir: Path
@@ -702,7 +707,10 @@ def check_cert_and_keys_nonexistent(opts: UkifyConfig) -> None:
     # Raise if any of the keys and certs are found on disk
     paths: Iterator[Union[str, Path, None]] = itertools.chain(
         (opts.sb_key, opts.sb_cert),
-        *((priv_key, pub_key, cert) for priv_key, pub_key, cert, _, _ in key_path_groups(opts)),
+        *(
+            (priv_key, pub_key, cert)
+            for priv_key, pub_key, cert, _, _ in key_path_groups(opts, include_extra=False)
+        ),
     )
     for path in paths:
         if path and Path(path).exists():
@@ -742,7 +750,8 @@ def combine_signatures(pcrsigs: list[dict[str, str]]) -> str:
 
 def key_path_groups(
     opts: UkifyConfig,
-) -> Iterator[tuple[str, Optional[str], Optional[str], Optional[str], Optional[str]]]:
+    include_extra: bool,
+) -> Iterator[tuple[str, Optional[str], Optional[str], Optional[list[str]], Optional[str]]]:
     if not opts.pcr_private_keys:
         return
 
@@ -760,6 +769,17 @@ def key_path_groups(
         policyrefs[:n_priv],
         fillvalue=None,
     )
+
+    # When requested, emit an extra signing group that reuses the first PCR signing key to produce
+    # a signed PCR policyy that can only be used from the initrd.
+    if opts.sign_initrd_pcrs and include_extra:
+        yield (
+            opts.pcr_private_keys[0],
+            pub_keys[0] if pub_keys else None,
+            certs[0] if certs else None,
+            ['enter-initrd'],
+            'initrd',
+        )
 
 
 def pe_strip_section_name(name: bytes) -> str:
@@ -879,7 +899,7 @@ def call_systemd_measure(uki: UKI, opts: UkifyConfig, profile_start: int = 0) ->
                 *(f'--bank={bank}' for bank in banks),
             ]
 
-            for priv_key, pub_key, cert, group, ref in key_path_groups(opts):
+            for priv_key, pub_key, cert, group, ref in key_path_groups(opts, include_extra=True):
                 extra = [f'--private-key={priv_key}']
                 if opts.signing_engine is not None:
                     assert pub_key or cert
@@ -1349,8 +1369,10 @@ def make_uki(opts: UkifyConfig) -> None:
                 print(f'{linux} is not a valid PE file and cannot be decompressed either', file=sys.stderr)
             else:
                 print(f'{linux} is compressed and cannot be loaded by UEFI, decompressing', file=sys.stderr)
-                linux = Path(tempfile.NamedTemporaryFile(prefix='linux-decompressed').name)
-                linux.write_bytes(decompressed)
+                linux_decompressed = tempfile.NamedTemporaryFile(prefix='linux-decompressed')
+                linux_decompressed.write(decompressed)
+                linux_decompressed.flush()
+                linux = Path(linux_decompressed.name)
 
     if linux and sign_args_present:
         assert opts.signtool is not None
@@ -1374,7 +1396,7 @@ def make_uki(opts: UkifyConfig) -> None:
 
     pcrpkey: Union[bytes, Path, None] = opts.pcrpkey
     if pcrpkey is None:
-        keyutil_tool = find_tool('systemd-keyutil', '/usr/lib/systemd/systemd-keyutil')
+        keyutil_tool = find_tool('systemd-keyutil', '/usr/lib/systemd/systemd-keyutil', opts=opts)
         cmd = [keyutil_tool, 'extract-public']
 
         if opts.pcr_public_keys and len(opts.pcr_public_keys) == 1:
@@ -1666,12 +1688,24 @@ def generate_keys(opts: UkifyConfig) -> None:
     # This will generate keys and certificates and write them to the paths that
     # are specified as input paths.
     if opts.sb_key and opts.sb_cert:
-        fqdn = socket.getfqdn()
+        # The length of CN must not exceed 64 bytes
+        if opts.sb_cert_common_name is not None:
+            cn = opts.sb_cert_common_name
+            if len(cn) == 0:
+                raise ValueError('--secureboot-certificate-common-name= must not be empty')
 
-        cn = f'SecureBoot signing key on host {fqdn}'
-        if len(cn) > 64:
-            # The length of CN must not exceed 64 bytes
-            cn = cn[:61] + '...'
+            # Older cryptography versions (checked 41) don't check that by themselves.
+            # Newer (at least 49) do, but with a much less useful error message, so keep this extra check.
+            if len(cn.encode()) > COMMON_NAME_MAX_LEN:
+                raise ValueError(
+                    f'--secureboot-certificate-common-name= is longer than {COMMON_NAME_MAX_LEN} bytes: {cn!r}'
+                )
+        else:
+            fqdn = socket.getfqdn()
+
+            cn = f'SecureBoot signing key on host {fqdn}'
+            if len(cn) > COMMON_NAME_MAX_LEN:
+                cn = cn[: COMMON_NAME_MAX_LEN - 3] + '...'
 
         key_pem, cert_pem = generate_key_cert_pair(
             common_name=cn,
@@ -1685,7 +1719,7 @@ def generate_keys(opts: UkifyConfig) -> None:
 
         work = True
 
-    for priv_key, pub_key, _, _, _ in key_path_groups(opts):
+    for priv_key, pub_key, _, _, _ in key_path_groups(opts, include_extra=False):
         priv_key_pem, pub_key_pem = generate_priv_pub_key_pair()
 
         print(f'Writing private key for PCR signing to {priv_key}', file=sys.stderr)
@@ -2188,6 +2222,13 @@ CONFIG_ITEMS = [
         config_key='UKI/SecureBootCertificate',
     ),
     ConfigItem(
+        '--secureboot-certificate-common-name',
+        metavar='CN',
+        dest='sb_cert_common_name',
+        help="common name of a certificate created by 'genkey'",
+        config_key='UKI/SecureBootCertificateCommonName',
+    ),
+    ConfigItem(
         '--secureboot-certificate-dir',
         dest='sb_certdir',
         default='/etc/pki/pesign',
@@ -2286,6 +2327,12 @@ CONFIG_ITEMS = [
         '--policy-digest',
         action=argparse.BooleanOptionalAction,
         help='print systemd-measure policy digests for the UKI',
+    ),
+    ConfigItem(
+        '--sign-initrd-pcrs',
+        action=argparse.BooleanOptionalAction,
+        help='additionally sign PCR policies that can only be satisfied from the initrd',
+        config_key='UKI/SignInitrdPCRs',
     ),
     ConfigItem(
         '--json',
@@ -2481,6 +2528,8 @@ def finalize_options(opts: argparse.Namespace) -> None:
         raise ValueError('--phases= specifications must match --pcr-private-key=')
     if n_policyrefs is not None and n_policyrefs != n_pcr_priv:
         raise ValueError('--policyref= specifications must match --pcr-private-key=')
+    if opts.sign_initrd_pcrs and not n_pcr_priv:
+        raise ValueError('--sign-initrd-pcrs requires at least one --pcr-private-key=')
 
     opts.cmdline = resolve_at_path(opts.cmdline)
 

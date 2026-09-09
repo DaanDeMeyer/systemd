@@ -16,6 +16,7 @@
 #include "sd-daemon.h"
 #include "sd-event.h"
 #include "sd-id128.h"
+#include "sd-json.h"
 #include "sd-netlink.h"
 #include "sd-path.h"
 #include "sd-varlink.h"
@@ -45,6 +46,7 @@
 #include "devnum-util.h"
 #include "discover-image.h"
 #include "dissect-image.h"
+#include "dlopen-note.h"
 #include "env-util.h"
 #include "escape.h"
 #include "ether-addr-util.h"
@@ -53,7 +55,6 @@
 #include "fdset.h"
 #include "fileio.h"
 #include "fork-notify.h"
-#include "format-table.h"
 #include "format-util.h"
 #include "fs-util.h"
 #include "gpt.h"
@@ -92,7 +93,6 @@
 #include "nspawn-setuid.h"
 #include "nspawn-stub-pid1.h"
 #include "nsresource.h"
-#include "options.h"
 #include "os-util.h"
 #include "osc-context.h"
 #include "pager.h"
@@ -128,11 +128,13 @@
 #include "sysctl-util.h"
 #include "terminal-util.h"
 #include "tmpfile-util.h"
+#include "udev-util.h"
 #include "uid-classification.h"
 #include "umask-util.h"
 #include "unit-name.h"
 #include "user-record.h"
 #include "user-util.h"
+#include "verbs.h"
 #include "vpick.h"
 
 /* The notify socket inside the container it can use to talk to nspawn using the sd_notify(3) protocol */
@@ -316,6 +318,14 @@ STATIC_DESTRUCTOR_REGISTER(arg_image_policy, image_policy_freep);
 STATIC_DESTRUCTOR_REGISTER(arg_background, freep);
 STATIC_DESTRUCTOR_REGISTER(arg_forward_journal, freep);
 
+COMMAND(
+        "systemd-nspawn\0",
+        "Spawn a command or OS in a lightweight container.",
+        .argspec = "[PATH] [ARGUMENTS…]\0",
+        .man_pages = "systemd-nspawn(1)\0",
+        .pager_flags = &arg_pager_flags,
+);
+
 static int parse_private_users(
                 const char *s,
                 UserNamespaceMode *ret_userns_mode,
@@ -378,69 +388,6 @@ static int parse_private_users(
                 *ret_userns_mode = USER_NAMESPACE_FIXED;
         }
 
-        return 0;
-}
-
-static int help(void) {
-        _cleanup_free_ char *link = NULL;
-        int r;
-
-        pager_open(arg_pager_flags);
-
-        r = terminal_urlify_man("systemd-nspawn", "1", &link);
-        if (r < 0)
-                return log_oom();
-
-        static const char* const groups[] = {
-                NULL,
-                "Image",
-                "Execution",
-                "System Identity",
-                "Properties",
-                "User Namespacing",
-                "Networking",
-                "Security",
-                "Resources",
-                "Integration",
-                "Mounts",
-                "Input/Output",
-                "Credentials",
-                "Other",
-        };
-
-        Table* tables[ELEMENTSOF(groups)] = {};
-        CLEANUP_ELEMENTS(tables, table_unref_array_clear);
-
-        for (size_t i = 0; i < ELEMENTSOF(groups); i++) {
-                r = option_parser_get_help_table_group(groups[i], &tables[i]);
-                if (r < 0)
-                        return r;
-        }
-
-        (void) table_sync_column_widths(0, tables[0], tables[1], tables[2], tables[3],
-                                        tables[4], tables[5], tables[6], tables[7],
-                                        tables[8], tables[9], tables[10], tables[11],
-                                        tables[12], tables[13]);
-
-        printf("%s [OPTIONS...] [PATH] [ARGUMENTS...]\n\n"
-               "%sSpawn a command or OS in a lightweight container.%s\n\n",
-               program_invocation_short_name,
-               ansi_highlight(),
-               ansi_normal());
-
-        r = table_print_or_warn(tables[0]);
-        if (r < 0)
-                return r;
-
-        for (size_t i = 1; i < ELEMENTSOF(groups); i++) {
-                printf("\n%s%s:%s\n", ansi_underline(), groups[i], ansi_normal());
-
-                r = table_print_or_warn(tables[i]);
-                if (r < 0)
-                        return r;
-        }
-
-        printf("\nSee the %s for details.\n", link);
         return 0;
 }
 
@@ -612,7 +559,7 @@ static int parse_argv(int argc, char *argv[]) {
                 switch (c) {
 
                 OPTION_COMMON_HELP:
-                        return help();
+                        return command_print_help();
 
                 OPTION_COMMON_VERSION:
                         return version();
@@ -1443,6 +1390,9 @@ static int parse_argv(int argc, char *argv[]) {
                 OPTION_LONG("system", NULL, "Run in the system service manager scope"):
                         arg_runtime_scope = RUNTIME_SCOPE_SYSTEM;
                         break;
+
+                OPTION_COMMON_INTROSPECT_CLI:
+                        return introspect_cli(SD_JSON_FORMAT_OFF);
                 }
         }
 
@@ -1877,7 +1827,7 @@ static int setup_timezone(const char *dest) {
 
         case TIMEZONE_COPY:
                 /* If mounting failed, try to copy */
-                r = copy_file_atomic("/etc/localtime", where, 0644, COPY_REFLINK|COPY_REPLACE);
+                r = copy_file_atomic("/etc/localtime", where, 0644, COPY_REPLACE);
                 if (r < 0) {
                         log_full_errno(ERRNO_IS_NEG_FS_WRITE_REFUSED(r) ? LOG_DEBUG : LOG_WARNING, r,
                                        "Failed to copy /etc/localtime to %s, ignoring: %m", where);
@@ -2005,9 +1955,9 @@ static int setup_resolv_conf(const char *dest) {
         }
 
         if (IN_SET(m, RESOLV_CONF_REPLACE_HOST, RESOLV_CONF_REPLACE_STATIC, RESOLV_CONF_REPLACE_UPLINK, RESOLV_CONF_REPLACE_STUB))
-                r = copy_file_atomic(what, where, 0644, COPY_REFLINK|COPY_REPLACE);
+                r = copy_file_atomic(what, where, 0644, COPY_REPLACE);
         else
-                r = copy_file(what, where, O_TRUNC|O_NOFOLLOW, 0644, COPY_REFLINK);
+                r = copy_file(what, where, O_TRUNC|O_NOFOLLOW, 0644, /* copy_flags= */ 0);
         if (r < 0) {
                 /* If the file already exists as symlink, let's suppress the warning, under the assumption that
                  * resolved or something similar runs inside and the symlink points there.
@@ -2232,9 +2182,9 @@ static int make_extra_nodes(const char *dest) {
         FOREACH_ARRAY(node, arg_extra_nodes, arg_n_extra_nodes) {
                 _cleanup_free_ char *path = NULL;
 
-                path = path_join(dest, node->path);
-                if (!path)
-                        return log_oom();
+                r = chase(node->path, dest, CHASE_PREFIX_ROOT|CHASE_NONEXISTENT|CHASE_NOFOLLOW, &path, /* ret_fd= */ NULL);
+                if (r < 0)
+                        return log_error_errno(r, "Failed to resolve device node path '%s': %m", node->path);
 
                 dev_t dev = S_ISCHR(node->mode) || S_ISBLK(node->mode) ? makedev(node->major, node->minor) : 0;
                 if (mknod(path, node->mode, dev) < 0)
@@ -3313,6 +3263,16 @@ static int patch_sysctl(void) {
         int r;
 
         flags = effective_clone_ns_flags();
+
+        if (FLAGS_SET(flags, CLONE_NEWUSER|CLONE_NEWNET) && !arg_network_namespace_path) {
+                /* Follow the system-wide default from sysctl.d/50-default.conf, but clamp it to the
+                 * groups mapped into the container's user namespace. */
+                r = sysctl_writef("net/ipv4/ping_group_range", "0 " GID_FMT,
+                                 MIN(arg_uid_range - 1, (gid_t) INT32_MAX));
+                if (r < 0)
+                        log_warning_errno(r,
+                                          "Failed to set sysctl 'net.ipv4.ping_group_range', ignoring: %m");
+        }
 
         STRV_FOREACH_PAIR(k, v, arg_sysctl) {
                 bool good = false;
@@ -5316,6 +5276,15 @@ static int run_container(
         assert_se(sigemptyset(&mask_chld) == 0);
         assert_se(sigaddset(&mask_chld, SIGCHLD) == 0);
 
+        assert(runtime_dir);
+        assert(directory);
+        assert(veth_name);
+        assert(veth_created);
+        assert(expose_args);
+        assert(master);
+        assert(pid);
+        assert(ret);
+
         /* Set up the unix export host directory on the host first */
         r = setup_unix_export_dir_outside(runtime_dir, &unix_export_host_dir);
         if (r < 0)
@@ -6044,8 +6013,6 @@ static int initialize_rlimits(void) {
 }
 
 static int cant_be_in_netns(void) {
-        _cleanup_close_ int fd = -EBADF;
-        struct ucred ucred;
         int r;
 
         /* Check if we are in the same netns as udev. If we aren't, then device monitoring (and thus waiting
@@ -6055,28 +6022,20 @@ static int cant_be_in_netns(void) {
         if (!arg_image) /* only matters if --image= us used, i.e. we actually need to use loopback devices */
                 return 0;
 
-        fd = socket(AF_UNIX, SOCK_SEQPACKET|SOCK_NONBLOCK|SOCK_CLOEXEC, 0);
-        if (fd < 0)
-                return log_error_errno(errno, "Failed to allocate udev control socket: %m");
+        if (arg_userns_mode == USER_NAMESPACE_MANAGED)
+                return 0;
 
-        r = connect_unix_path(fd, AT_FDCWD, "/run/udev/control");
-        if (r == -ENOENT || ERRNO_IS_NEG_DISCONNECT(r))
+        if (!udev_available())
                 return log_error_errno(SYNTHETIC_ERRNO(EOPNOTSUPP),
-                                       "Sorry, but --image= requires access to the host's /run/ hierarchy, since we need access to udev.");
+                                       "Sorry, but --image= requires that systemd-udevd is available.");
+
+        r = namespace_is_init(NAMESPACE_NET);
         if (ERRNO_IS_NEG_PRIVILEGE(r)) {
-                log_debug_errno(r, "Can't connect to udev control socket, assuming we are in same netns.");
+                log_debug_errno(r, "Failed to check if we are in the main network namespace, assuming so, ignoring: %m");
                 return 0;
         }
         if (r < 0)
-                return log_error_errno(r, "Failed to connect socket to udev control socket: %m");
-
-        r = getpeercred(fd, &ucred);
-        if (r < 0)
-                return log_error_errno(r, "Failed to determine peer of udev control socket: %m");
-
-        r = in_same_namespace(ucred.pid, 0, NAMESPACE_NET);
-        if (r < 0)
-                return log_error_errno(r, "Failed to determine network namespace of udev: %m");
+                return log_error_errno(r, "Failed to check if we are in the main network namespace: %m");
         if (r == 0)
                 return log_error_errno(SYNTHETIC_ERRNO(EOPNOTSUPP),
                                        "Sorry, but --image= is only supported in the main network namespace, since we need access to udev/AF_NETLINK.");
@@ -6148,13 +6107,20 @@ static int run(int argc, char *argv[]) {
         if (arg_cleanup)
                 return do_cleanup();
 
-        (void) DLOPEN_CRYPTSETUP(LOG_DEBUG, suggested);
-        (void) DLOPEN_LIBACL(LOG_DEBUG, recommended);
-        (void) DLOPEN_LIBBLKID(LOG_DEBUG, recommended);
-        (void) DLOPEN_LIBCRYPTO(LOG_WARNING, recommended);
-        (void) DLOPEN_LIBMOUNT(LOG_DEBUG, recommended);
-        (void) DLOPEN_LIBSECCOMP(LOG_DEBUG, recommended);
-        (void) DLOPEN_LIBSELINUX(LOG_DEBUG, recommended);
+        LIBACL_NOTE(recommended);
+        LIBBLKID_NOTE(recommended);
+        LIBCRYPTO_NOTE(recommended);
+        LIBCRYPTSETUP_NOTE(suggested);
+        LIBMOUNT_NOTE(recommended);
+        LIBSECCOMP_NOTE(recommended);
+        LIBSELINUX_NOTE(recommended);
+        (void) dlopen_cryptsetup(LOG_DEBUG);
+        (void) dlopen_libacl(LOG_DEBUG);
+        (void) dlopen_libblkid(LOG_DEBUG);
+        (void) dlopen_libcrypto(LOG_WARNING);
+        (void) dlopen_libmount(LOG_DEBUG);
+        (void) dlopen_libseccomp(LOG_DEBUG);
+        (void) dlopen_libselinux(LOG_DEBUG);
 
         r = cg_has_legacy();
         if (r < 0)
@@ -6474,7 +6440,7 @@ static int run(int argc, char *argv[]) {
                         {
                                 BLOCK_SIGNALS(SIGINT);
                                 r = copy_file(arg_image, np, O_EXCL, arg_read_only ? 0400 : 0600,
-                                              COPY_REFLINK|COPY_CRTIME|COPY_SIGINT|COPY_NOCOW_AFTER);
+                                              COPY_CRTIME|COPY_SIGINT|COPY_NOCOW_AFTER);
                         }
                         if (r == -EINTR) {
                                 log_error_errno(r, "Interrupted while copying image file to %s, removed again.", np);

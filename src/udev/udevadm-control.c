@@ -2,10 +2,10 @@
 
 #include <string.h>
 
+#include "sd-json.h"
+
+#include "build.h"
 #include "creds-util.h"
-#include "errno-util.h"
-#include "format-table.h"
-#include "help-util.h"
 #include "log.h"
 #include "options.h"
 #include "parse-argument.h"
@@ -14,10 +14,10 @@
 #include "strv.h"
 #include "syslog-util.h"
 #include "time-util.h"
-#include "udev-ctrl.h"
 #include "udev-varlink.h"
 #include "udevadm.h"
 #include "varlink-util.h"
+#include "verbs.h"
 #include "virt.h"
 
 static char **arg_env = NULL;
@@ -47,25 +47,6 @@ static bool arg_has_control_commands(void) {
                 arg_revert;
 }
 
-static int help(void) {
-        _cleanup_(table_unrefp) Table *options = NULL;
-        int r;
-
-        r = option_parser_get_help_table_ns("udevadm-control", &options);
-        if (r < 0)
-                return r;
-
-        help_cmdline("control OPTION");
-        help_abstract("Control the udev daemon.");
-        help_section("Options");
-        r = table_print_or_warn(options);
-        if (r < 0)
-                return r;
-
-        help_man_page_reference("udevadm", "8");
-        return 0;
-}
-
 static int parse_argv(int argc, char *argv[]) {
         int r;
 
@@ -80,10 +61,10 @@ static int parse_argv(int argc, char *argv[]) {
                 OPTION_NAMESPACE("udevadm-control"): {}
 
                 OPTION_COMMON_HELP:
-                        return help();
+                        return command_print_verb_help("control");
 
-                OPTION('V', "version", NULL, "Show package version"):
-                        return print_version();
+                OPTION_COMMON_VERSION_WITH_V:
+                        return version_only();
 
                 OPTION('e', "exit", NULL, "Instruct the daemon to cleanup and exit"):
                         arg_exit = true;
@@ -157,6 +138,9 @@ static int parse_argv(int argc, char *argv[]) {
                 OPTION_LONG("load-credentials", NULL, "Load udev rules from credentials"):
                         arg_load_credentials = true;
                         break;
+
+                OPTION_COMMON_INTROSPECT_CLI:
+                        return introspect_cli(SD_JSON_FORMAT_OFF);
                 }
 
         if (!arg_has_control_commands() && !arg_load_credentials)
@@ -170,79 +154,11 @@ static int parse_argv(int argc, char *argv[]) {
         return 1;
 }
 
-static int send_control_commands_via_ctrl(void) {
-        _cleanup_(udev_ctrl_unrefp) UdevCtrl *uctrl = NULL;
-        int r;
-
-        r = udev_ctrl_new(&uctrl);
-        if (r < 0)
-                return log_error_errno(r, "Failed to initialize udev control: %m");
-
-        if (arg_exit) {
-                r = udev_ctrl_send_exit(uctrl);
-                if (r < 0)
-                       return log_error_errno(r, "Failed to send exit request: %m");
-                return 0;
-        }
-
-        if (arg_log_level >= 0) {
-                r = udev_ctrl_send_set_log_level(uctrl, arg_log_level);
-                if (r < 0)
-                        return log_error_errno(r, "Failed to send request to set log level: %m");
-        }
-
-        if (arg_start_exec_queue == false) {
-                r = udev_ctrl_send_stop_exec_queue(uctrl);
-                if (r < 0)
-                        return log_error_errno(r, "Failed to send request to stop exec queue: %m");
-        }
-
-        if (arg_start_exec_queue == true) {
-                r = udev_ctrl_send_start_exec_queue(uctrl);
-                if (r < 0)
-                        return log_error_errno(r, "Failed to send request to start exec queue: %m");
-        }
-
-        if (arg_reload) {
-                r = udev_ctrl_send_reload(uctrl);
-                if (r < 0)
-                        return log_error_errno(r, "Failed to send reload request: %m");
-        }
-
-        STRV_FOREACH(env, arg_env) {
-                r = udev_ctrl_send_set_env(uctrl, *env);
-                if (r < 0)
-                        return log_error_errno(r, "Failed to send request to update environment: %m");
-        }
-
-        if (arg_max_children >= 0) {
-                r = udev_ctrl_send_set_children_max(uctrl, arg_max_children);
-                if (r < 0)
-                        return log_error_errno(r, "Failed to send request to set number of children: %m");
-        }
-
-        if (arg_ping) {
-                r = udev_ctrl_send_ping(uctrl);
-                if (r < 0)
-                        return log_error_errno(r, "Failed to send a ping message: %m");
-        }
-
-        r = udev_ctrl_wait(uctrl, arg_timeout);
-        if (r < 0)
-                return log_error_errno(r, "Failed to wait for daemon to reply: %m");
-
-        return 0;
-}
-
 static int send_control_commands(void) {
         _cleanup_(sd_varlink_flush_close_unrefp) sd_varlink *link = NULL;
         int r;
 
         r = udev_varlink_connect(&link, arg_timeout);
-        if (ERRNO_IS_NEG_DISCONNECT(r) || r == -ENOENT) {
-                log_debug_errno(r, "Failed to connect to udev via varlink, falling back to use legacy control socket, ignoring: %m");
-                return send_control_commands_via_ctrl();
-        }
         if (r < 0)
                 return log_error_errno(r, "Failed to connect to udev via varlink: %m");
 
